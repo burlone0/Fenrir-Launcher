@@ -131,8 +131,8 @@ mod tests {
     fn test_build_wine_env_no_sync() {
         let prefix = PathBuf::from("/tmp/test-prefix");
         let env = build_wine_env(&prefix, false, false);
-        assert!(env.get("WINEESYNC").is_none());
-        assert!(env.get("WINEFSYNC").is_none());
+        assert!(!env.contains_key("WINEESYNC"));
+        assert!(!env.contains_key("WINEFSYNC"));
     }
 
     #[test]
@@ -140,6 +140,6 @@ mod tests {
         let prefix = PathBuf::from("/tmp/test-prefix");
         let env = build_wine_env(&prefix, true, false);
         assert_eq!(env.get("WINEESYNC").unwrap(), "1");
-        assert!(env.get("WINEFSYNC").is_none());
+        assert!(!env.contains_key("WINEFSYNC"));
     }
 }

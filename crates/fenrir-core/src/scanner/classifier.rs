@@ -231,7 +231,7 @@ mod tests {
         assert!(result.is_some());
         let (score, _) = result.unwrap();
         // required(30) only — between thresholds
-        assert!(score >= THRESHOLD_LOW && score < THRESHOLD_HIGH);
+        assert!((THRESHOLD_LOW..THRESHOLD_HIGH).contains(&score));
     }
 
     #[test]
