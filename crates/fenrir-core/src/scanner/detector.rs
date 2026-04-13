@@ -44,8 +44,7 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
                                     path: parent.to_path_buf(),
                                     exe_files: vec![path.to_path_buf()],
                                 });
-                            } else if let Some(c) =
-                                candidates.iter_mut().find(|c| c.path == parent)
+                            } else if let Some(c) = candidates.iter_mut().find(|c| c.path == parent)
                             {
                                 c.exe_files.push(path.to_path_buf());
                             }
@@ -67,9 +66,7 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
 fn is_ignored_entry(entry: &walkdir::DirEntry) -> bool {
     if entry.file_type().is_dir() {
         if let Some(name) = entry.file_name().to_str() {
-            return IGNORED_DIRS
-                .iter()
-                .any(|&d| name.eq_ignore_ascii_case(d));
+            return IGNORED_DIRS.iter().any(|&d| name.eq_ignore_ascii_case(d));
         }
     }
     false

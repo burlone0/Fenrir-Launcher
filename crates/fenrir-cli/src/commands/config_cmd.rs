@@ -1,17 +1,16 @@
 use fenrir_core::config::settings::FenrirConfig;
 
-pub fn run(
-    set: Option<String>,
-    value: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(set: Option<String>, value: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut config = FenrirConfig::load()?;
 
     match (set, value) {
         (Some(key), Some(val)) => {
             match key.as_str() {
                 "scan.game_dirs" => {
-                    let dirs: Vec<std::path::PathBuf> =
-                        val.split(',').map(|s| std::path::PathBuf::from(s.trim())).collect();
+                    let dirs: Vec<std::path::PathBuf> = val
+                        .split(',')
+                        .map(|s| std::path::PathBuf::from(s.trim()))
+                        .collect();
                     config.scan.game_dirs = dirs;
                 }
                 "scan.auto_scan" => config.scan.auto_scan = val.parse()?,

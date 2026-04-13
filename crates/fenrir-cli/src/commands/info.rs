@@ -31,10 +31,7 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
                 g.prefix_path.to_string_lossy().to_string()
             };
             println!("Prefix:      {}", prefix_display);
-            println!(
-                "Runtime:     {}",
-                g.runtime_id.as_deref().unwrap_or("auto")
-            );
+            println!("Runtime:     {}", g.runtime_id.as_deref().unwrap_or("auto"));
             println!(
                 "Play time:   {}h {}m",
                 g.play_time / 3600,
