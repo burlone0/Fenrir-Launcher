@@ -1,0 +1,414 @@
+use fenrir_core::config::settings::FenrirConfig;
+use fenrir_core::library::db::Database;
+use fenrir_core::library::game::{Game, GameStatus, StoreOrigin};
+use fenrir_core::prefix::builder;
+use fenrir_core::prefix::profile::{load_profiles_from_dir, WineProfile};
+use fenrir_core::runtime::discovery::discover_runtimes_in_dir;
+use fenrir_core::runtime::{RuntimeSource, RuntimeType};
+use fenrir_core::scanner;
+use fenrir_core::scanner::signatures;
+use std::fs;
+use std::path::PathBuf;
+use tempfile::tempdir;
+
+// ---------------------------------------------------------------------------
+// Test 1: Full scan pipeline (scan → classify → persist in DB)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_full_scan_pipeline() {
+    // Setup: create a fake game directory structure
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Fake Game");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("game.exe"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_appid.txt"), "12345").unwrap();
+
+    // Load signatures from inline TOML
+    let sig_toml = r#"
+[steam_generic]
+name = "Steam Generic Crack"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = ["steam_api64.dll", "steam_appid.txt"]
+confidence_boost = ["steam_emu.ini"]
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+
+    // Scan
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+
+    assert_eq!(result.high_confidence.len(), 1);
+    assert_eq!(result.high_confidence[0].title, "Fake Game");
+    assert_eq!(result.high_confidence[0].store_origin, StoreOrigin::Steam);
+    assert!(result.high_confidence[0].confidence >= 60);
+
+    // Persist to DB
+    let db = Database::open_in_memory().unwrap();
+    let game = Game {
+        id: uuid::Uuid::new_v4(),
+        title: result.high_confidence[0].title.clone(),
+        executable: result.high_confidence[0].exe_files[0].clone(),
+        install_dir: result.high_confidence[0].path.clone(),
+        store_origin: result.high_confidence[0].store_origin,
+        crack_type: result.high_confidence[0].crack_type,
+        prefix_path: PathBuf::new(),
+        runtime_id: None,
+        status: GameStatus::Detected,
+        play_time: 0,
+        last_played: None,
+        added_at: chrono::Utc::now(),
+        user_overrides: None,
+    };
+    db.insert_game(&game).unwrap();
+
+    // Verify
+    let games = db.list_games().unwrap();
+    assert_eq!(games.len(), 1);
+    assert_eq!(games[0].title, "Fake Game");
+    assert_eq!(games[0].status, GameStatus::Detected);
+}
+
+// ---------------------------------------------------------------------------
+// Test 2: Config persistence roundtrip
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_config_persistence() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+
+    let mut config = FenrirConfig::default();
+    config.scan.game_dirs = vec![PathBuf::from("/mnt/games")];
+    config.privacy.fetch_metadata = true;
+    config.save_to(&config_path).unwrap();
+
+    let loaded = FenrirConfig::load_from(&config_path).unwrap();
+    assert_eq!(loaded.scan.game_dirs.len(), 1);
+    assert_eq!(loaded.scan.game_dirs[0], PathBuf::from("/mnt/games"));
+    assert!(loaded.privacy.fetch_metadata);
+}
+
+// ---------------------------------------------------------------------------
+// Test 3: Runtime discovery pipeline
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_runtime_discovery_pipeline() {
+    let dir = tempdir().unwrap();
+
+    // Simulate runtime directory structure
+    fs::create_dir(dir.path().join("GE-Proton9-20")).unwrap();
+    fs::create_dir(dir.path().join("wine-ge-8-26")).unwrap();
+    fs::create_dir(dir.path().join("Proton 9.0")).unwrap();
+    fs::create_dir(dir.path().join("not-a-runtime")).unwrap();
+
+    let runtimes = discover_runtimes_in_dir(dir.path(), RuntimeSource::Downloaded);
+
+    assert_eq!(runtimes.len(), 3);
+
+    let proton_ge = runtimes.iter().find(|r| r.id == "GE-Proton9-20").unwrap();
+    assert_eq!(proton_ge.runtime_type, RuntimeType::ProtonGE);
+    assert_eq!(proton_ge.version, "9-20");
+
+    let wine_ge = runtimes.iter().find(|r| r.id == "wine-ge-8-26").unwrap();
+    assert_eq!(wine_ge.runtime_type, RuntimeType::WineGE);
+
+    let proton = runtimes.iter().find(|r| r.id == "Proton 9.0").unwrap();
+    assert_eq!(proton.runtime_type, RuntimeType::Proton);
+}
+
+// ---------------------------------------------------------------------------
+// Test 4: Profile loading from disk
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_profile_loading_pipeline() {
+    let dir = tempdir().unwrap();
+
+    fs::write(
+        dir.path().join("steam_generic.toml"),
+        r#"
+[profile]
+name = "steam_generic"
+description = "Default profile for Steam cracked games"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n"]
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        dir.path().join("onlinefix.toml"),
+        r#"
+[profile]
+name = "onlinefix"
+description = "Profile for OnlineFix cracked games"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n", "steamclient=n", "steamclient64=n"]
+
+[env]
+OPENSSL_ia32cap = "~0x20000000"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+"#,
+    )
+    .unwrap();
+
+    let profiles = load_profiles_from_dir(dir.path()).unwrap();
+    assert_eq!(profiles.len(), 2);
+
+    let steam = &profiles["steam_generic"];
+    assert_eq!(steam.wine.dll_overrides.len(), 2);
+    assert!(steam.features.dxvk);
+
+    let onlinefix = &profiles["onlinefix"];
+    assert_eq!(onlinefix.wine.dll_overrides.len(), 4);
+    assert_eq!(onlinefix.env.get("OPENSSL_ia32cap").unwrap(), "~0x20000000");
+}
+
+// ---------------------------------------------------------------------------
+// Test 5: Prefix env building with profile features
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_prefix_env_with_profile() {
+    let prefix = PathBuf::from("/tmp/test-game-prefix");
+
+    let profile_toml = r#"
+[profile]
+name = "test_profile"
+description = "Test"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n"]
+
+[env]
+CUSTOM_VAR = "custom_value"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+"#;
+
+    let profile = WineProfile::parse(profile_toml).unwrap();
+
+    // Build base env from profile features
+    let env = builder::build_wine_env(&prefix, profile.features.esync, profile.features.fsync);
+    assert_eq!(env.get("WINEESYNC").unwrap(), "1");
+    assert_eq!(env.get("WINEFSYNC").unwrap(), "1");
+    assert_eq!(env.get("WINEPREFIX").unwrap(), "/tmp/test-game-prefix");
+}
+
+// ---------------------------------------------------------------------------
+// Test 6: Launcher command composition (Wine vs Proton)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_launch_command_wine_vs_proton() {
+    use fenrir_core::launcher::runner::{build_launch_command, LaunchConfig};
+    use std::collections::HashMap;
+
+    // Wine command
+    let wine_cmd = build_launch_command(&LaunchConfig {
+        executable: PathBuf::from("/games/elden-ring/game.exe"),
+        wine_binary: PathBuf::from("/usr/bin/wine"),
+        prefix_path: PathBuf::from("/data/prefixes/uuid-1234"),
+        env_vars: HashMap::new(),
+        is_proton: false,
+        proton_path: None,
+    });
+
+    assert_eq!(wine_cmd.program, "/usr/bin/wine");
+    assert_eq!(wine_cmd.args, vec!["/games/elden-ring/game.exe"]);
+    assert_eq!(
+        wine_cmd.env.get("WINEPREFIX").unwrap(),
+        "/data/prefixes/uuid-1234"
+    );
+    assert_eq!(wine_cmd.working_dir, PathBuf::from("/games/elden-ring"));
+
+    // Proton command
+    let proton_cmd = build_launch_command(&LaunchConfig {
+        executable: PathBuf::from("/games/elden-ring/game.exe"),
+        wine_binary: PathBuf::from("/runtimes/GE-Proton9-20/proton"),
+        prefix_path: PathBuf::from("/data/prefixes/uuid-1234"),
+        env_vars: HashMap::new(),
+        is_proton: true,
+        proton_path: Some(PathBuf::from("/runtimes/GE-Proton9-20")),
+    });
+
+    assert_eq!(proton_cmd.program, "/runtimes/GE-Proton9-20/proton");
+    assert_eq!(proton_cmd.args, vec!["run", "/games/elden-ring/game.exe"]);
+    assert!(proton_cmd.env.contains_key("STEAM_COMPAT_DATA_PATH"));
+    // Proton should NOT have WINEPREFIX — it uses STEAM_COMPAT_DATA_PATH
+    assert!(!proton_cmd.env.contains_key("WINEPREFIX"));
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: Full flow — scan → DB → configure (prefix + profile) → verify state
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_scan_to_configure_flow() {
+    // 1. Scan: create fake game
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Cyberpunk 2077");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("Cyberpunk2077.exe"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_appid.txt"), "1091500").unwrap();
+
+    let sigs = signatures::parse_signatures_from_str(
+        r#"
+[steam_generic]
+name = "Steam Generic Crack"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = ["steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+"#,
+    )
+    .unwrap();
+
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+    assert_eq!(result.high_confidence.len(), 1);
+
+    let classified = &result.high_confidence[0];
+
+    // 2. Insert in DB as Detected
+    let db = Database::open_in_memory().unwrap();
+    let game_id = uuid::Uuid::new_v4();
+    let mut game = Game {
+        id: game_id,
+        title: classified.title.clone(),
+        executable: classified.exe_files[0].clone(),
+        install_dir: classified.path.clone(),
+        store_origin: classified.store_origin,
+        crack_type: classified.crack_type,
+        prefix_path: PathBuf::new(),
+        runtime_id: None,
+        status: GameStatus::Detected,
+        play_time: 0,
+        last_played: None,
+        added_at: chrono::Utc::now(),
+        user_overrides: None,
+    };
+    db.insert_game(&game).unwrap();
+
+    // 3. Simulate configure: assign prefix and runtime
+    let prefix_dir = tempdir().unwrap();
+    let prefix_path = fenrir_core::prefix::prefix_path_for_game(prefix_dir.path(), game_id);
+
+    game.prefix_path = prefix_path;
+    game.runtime_id = Some("GE-Proton9-20".to_string());
+    game.status = GameStatus::Configured;
+    db.update_game(&game).unwrap();
+
+    // 4. Verify final state
+    let fetched = db.get_game(game_id).unwrap().unwrap();
+    assert_eq!(fetched.title, "Cyberpunk 2077");
+    assert_eq!(fetched.status, GameStatus::Configured);
+    assert_eq!(fetched.runtime_id.as_deref(), Some("GE-Proton9-20"));
+    assert!(fetched
+        .prefix_path
+        .to_string_lossy()
+        .contains(&game_id.to_string()));
+}
+
+// ---------------------------------------------------------------------------
+// Test 8: OnlineFix detection → correct profile selection
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_onlinefix_detection_and_profile_match() {
+    // Scan with OnlineFix signature
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Some Game");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("game.exe"), "fake").unwrap();
+    fs::write(game_dir.join("OnlineFix.url"), "fake").unwrap();
+    fs::write(game_dir.join("OnlineFix64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api.dll"), "fake").unwrap();
+
+    let sig_toml = r#"
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["OnlineFix.url"]
+optional_files = ["OnlineFix64.dll", "steamclient.dll"]
+confidence_boost = []
+
+[steam_generic]
+name = "Steam Generic Crack"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = ["steam_api64.dll"]
+confidence_boost = []
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+
+    // OnlineFix should win (30 required + 15 optional = 45, vs Steam 30)
+    let all_games: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+    assert_eq!(all_games.len(), 1);
+
+    let game = all_games[0];
+    assert_eq!(
+        game.crack_type,
+        Some(fenrir_core::library::game::CrackType::OnlineFix)
+    );
+
+    // Verify correct profile would be selected
+    let profiles_dir = tempdir().unwrap();
+    fs::write(
+        profiles_dir.path().join("onlinefix.toml"),
+        r#"
+[profile]
+name = "onlinefix"
+description = "OnlineFix profile"
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steamclient=n"]
+[env]
+OPENSSL_ia32cap = "~0x20000000"
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+"#,
+    )
+    .unwrap();
+
+    let profiles = load_profiles_from_dir(profiles_dir.path()).unwrap();
+    assert!(profiles.contains_key("onlinefix"));
+    let profile = &profiles["onlinefix"];
+    assert!(profile.env.contains_key("OPENSSL_ia32cap"));
+}
