@@ -1,0 +1,15 @@
+[profile]
+name = "steam_generic"
+description = "Default profile for Steam cracked games"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n"]
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true

@@ -12,8 +12,7 @@ pub struct Database {
 impl Database {
     pub fn open(path: &Path) -> Result<Self, DatabaseError> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| DatabaseError::Migration(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| DatabaseError::Migration(e.to_string()))?;
         }
         let conn = Connection::open(path)?;
         let db = Self { conn };
@@ -198,8 +197,11 @@ fn row_to_game(row: &rusqlite::Row) -> Result<Game, DatabaseError> {
         runtime_id: row.get(7)?,
         status: parse_game_status(&status_str),
         play_time: row.get::<_, i64>(9)? as u64,
-        last_played: last_played_str
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|d| d.with_timezone(&Utc))),
+        last_played: last_played_str.and_then(|s| {
+            DateTime::parse_from_rfc3339(&s)
+                .ok()
+                .map(|d| d.with_timezone(&Utc))
+        }),
         added_at: DateTime::parse_from_rfc3339(&added_str)
             .map(|d| d.with_timezone(&Utc))
             .map_err(|e| DatabaseError::Migration(e.to_string()))?,
