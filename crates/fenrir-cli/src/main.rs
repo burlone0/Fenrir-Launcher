@@ -39,6 +39,32 @@ enum Commands {
         #[arg(short, long)]
         value: Option<String>,
     },
+    /// Configure a game (create prefix + apply tuning profile)
+    Configure {
+        /// Game title or UUID
+        query: String,
+    },
+    /// Launch a configured game
+    Launch {
+        /// Game title or UUID
+        query: String,
+    },
+    /// Manage Wine/Proton runtimes
+    Runtime {
+        #[command(subcommand)]
+        action: RuntimeAction,
+    },
+}
+
+#[derive(clap::Subcommand)]
+enum RuntimeAction {
+    /// List available runtimes
+    List,
+    /// Set default runtime
+    SetDefault {
+        /// Runtime ID
+        id: String,
+    },
 }
 
 fn main() {
@@ -54,6 +80,12 @@ fn main() {
         Commands::Info { game } => commands::info::run(&game),
         Commands::Add { path } => commands::add::run(&path),
         Commands::Config { set, value } => commands::config_cmd::run(set, value),
+        Commands::Configure { ref query } => commands::configure::run(query),
+        Commands::Launch { ref query } => commands::launch::run(query),
+        Commands::Runtime { ref action } => match action {
+            RuntimeAction::List => commands::runtime::list(),
+            RuntimeAction::SetDefault { ref id } => commands::runtime::set_default(id),
+        },
     };
 
     if let Err(e) = result {
