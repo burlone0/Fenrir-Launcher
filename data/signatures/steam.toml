@@ -1,0 +1,36 @@
+[steam_generic]
+name = "Steam Generic Crack"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = ["steam_api64.dll", "steam_appid.txt"]
+confidence_boost = ["steam_emu.ini", "cream_api.ini"]
+
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["OnlineFix.url"]
+optional_files = ["OnlineFix64.dll", "steamclient.dll"]
+confidence_boost = ["steam_settings/"]
+
+[fitgirl]
+name = "FitGirl Repack"
+store = "Steam"
+crack_type = "FitGirl"
+required_files = ["fitgirl-repacks.site"]
+optional_files = ["md5.txt"]
+confidence_boost = ["steam_api.dll"]
+
+[dodi]
+name = "DODI Repack"
+store = "Steam"
+crack_type = "DODI"
+required_files = ["DODI Repacks/"]
+optional_files = ["_Redist/"]
+confidence_boost = ["steam_api.dll"]
+
+[scene]
+name = "Scene Release"
+crack_type = "Scene"
+required_files = ["*.nfo"]
+optional_files = ["cd1/", "cd2/", "disc1/"]
