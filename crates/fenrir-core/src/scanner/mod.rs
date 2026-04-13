@@ -35,9 +35,7 @@ pub fn scan_directory(
     let mut needs_confirmation = Vec::new();
 
     for candidate in &candidates {
-        if let Some((score, classified)) =
-            classifier::classify_candidate(candidate, signatures)
-        {
+        if let Some((score, classified)) = classifier::classify_candidate(candidate, signatures) {
             if score >= high_confidence_threshold() {
                 high_confidence.push(classified);
             } else {
