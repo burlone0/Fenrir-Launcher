@@ -11,12 +11,25 @@ pub fn prefix_path_for_game(prefix_dir: &Path, game_id: Uuid) -> PathBuf {
 }
 
 /// Create and initialize a WINEPREFIX.
-pub fn create_prefix(prefix_path: &Path, wine_binary: &Path) -> Result<(), PrefixError> {
+pub fn create_prefix(prefix_path: &Path, wine_binary: &Path, is_proton: bool) -> Result<(), PrefixError> {
     std::fs::create_dir_all(prefix_path).map_err(|e| PrefixError::Directory(e.to_string()))?;
 
     info!("initializing prefix at {}", prefix_path.display());
 
-    let output = Command::new(wine_binary)
+    // For Proton runtimes the `proton` wrapper script requires Steam environment variables
+    // that are unavailable during prefix creation. Use the internal Wine binary instead,
+    // which lives at <proton_dir>/files/bin/wine and works identically for initialization.
+    let effective_wine = if is_proton {
+        wine_binary
+            .parent()
+            .map(|proton_dir| proton_dir.join("files/bin/wine"))
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| wine_binary.to_path_buf())
+    } else {
+        wine_binary.to_path_buf()
+    };
+
+    let output = Command::new(&effective_wine)
         .arg("wineboot")
         .arg("--init")
         .env("WINEPREFIX", prefix_path)
@@ -141,5 +154,23 @@ mod tests {
         let env = build_wine_env(&prefix, true, false);
         assert_eq!(env.get("WINEESYNC").unwrap(), "1");
         assert!(!env.contains_key("WINEFSYNC"));
+    }
+
+    // create_prefix with is_proton=true should fall back to the wine_binary itself
+    // when files/bin/wine does not exist (non-existent proton dir path used here).
+    #[test]
+    fn test_create_prefix_proton_fallback_when_no_internal_wine() {
+        let dir = tempfile::tempdir().unwrap();
+        let fake_proton = dir.path().join("proton");
+        // No files/bin/wine exists → effective_wine falls back to wine_binary
+        // create_prefix will fail because fake_proton is not an executable, but
+        // the failure must come from wineboot, NOT from resolving the path.
+        let result = create_prefix(dir.path(), &fake_proton, true);
+        assert!(
+            result.is_err(),
+            "expected error because proton binary is not executable"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("wineboot failed"), "unexpected error: {msg}");
     }
 }
