@@ -6,6 +6,7 @@ slow launchers.
 
 [![CI](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-green.svg)
 
 ## What It Does
 
