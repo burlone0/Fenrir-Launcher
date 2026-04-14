@@ -1,12 +1,30 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: OnlineFix
+# =============================================================================
+#
+# Applied to games detected as OnlineFix cracks. OnlineFix patches enable
+# LAN and online multiplayer through Steam emulation, so they ship custom
+# steamclient DLLs that need special handling.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
 [profile]
 name = "onlinefix"
 description = "Profile for OnlineFix cracked games"
 
 [wine]
 windows_version = "win10"
+
+# OnlineFix ships its own steamclient DLLs (both 32-bit and 64-bit) in
+# addition to the usual steam_api replacements. All four must be set to
+# native so Wine uses the crack's versions.
 dll_overrides = ["steam_api=n", "steam_api64=n", "steamclient=n", "steamclient64=n"]
 
 [env]
+# OnlineFix sometimes hits OpenSSL issues on certain CPU instruction sets.
+# This environment variable disables the problematic AVX instruction that
+# causes crashes in some configurations.
 OPENSSL_ia32cap = "~0x20000000"
 
 [features]

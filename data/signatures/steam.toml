@@ -1,3 +1,38 @@
+# =============================================================================
+# Fenrir -- Game Detection Signatures
+# =============================================================================
+#
+# This file defines patterns that Fenrir uses to identify games and classify
+# their type (crack, repack, scene release, etc.) during a directory scan.
+#
+# HOW IT WORKS:
+# Fenrir walks a game directory and checks for the presence of specific files
+# and folders. Each signature defines a set of required, optional, and boost
+# files. If all required files are present, the game is a candidate. Optional
+# and boost matches increase the confidence score.
+#
+# SCORING:
+#   required_files  -> +30 points each (ALL must be present or score is 0)
+#   optional_files  -> +15 points each
+#   confidence_boost -> +10 points each
+#
+# THRESHOLDS:
+#   >= 60 points  -> high confidence, auto-added to library
+#   30-59 points  -> needs user confirmation
+#   < 30 points   -> ignored
+#
+# FILE PATTERNS:
+#   "filename.ext"  -> exact file match (case-insensitive fallback)
+#   "dirname/"      -> directory match (trailing slash required)
+#   "*.ext"         -> glob pattern match
+#
+# To add a new signature, create a new [section] with a unique key.
+# See docs/dev/signatures-guide.md for the full guide.
+# =============================================================================
+
+# Generic Steam crack -- catches most cracks that ship steam_api.dll.
+# This is the broadest pattern and acts as a fallback when more specific
+# signatures (OnlineFix, FitGirl, etc.) don't match.
 [steam_generic]
 name = "Steam Generic Crack"
 store = "Steam"
@@ -5,6 +40,9 @@ required_files = ["steam_api.dll"]
 optional_files = ["steam_api64.dll", "steam_appid.txt"]
 confidence_boost = ["steam_emu.ini", "cream_api.ini"]
 
+# OnlineFix -- identifiable by the OnlineFix.url shortcut file.
+# These cracks often include custom steamclient DLLs and a steam_settings/
+# directory for LAN/online play emulation.
 [onlinefix]
 name = "OnlineFix"
 store = "Steam"
@@ -13,6 +51,9 @@ required_files = ["OnlineFix.url"]
 optional_files = ["OnlineFix64.dll", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
 
+# FitGirl Repack -- identified by the fitgirl-repacks.site marker file.
+# FitGirl repacks are heavily compressed; the game directory looks like
+# a normal Steam crack after installation.
 [fitgirl]
 name = "FitGirl Repack"
 store = "Steam"
@@ -21,6 +62,9 @@ required_files = ["fitgirl-repacks.site"]
 optional_files = ["md5.txt"]
 confidence_boost = ["steam_api.dll"]
 
+# DODI Repack -- identified by the "DODI Repacks/" marker directory.
+# Similar to FitGirl, the installed game is a standard Steam crack
+# with additional redistribuable folders.
 [dodi]
 name = "DODI Repack"
 store = "Steam"
@@ -29,6 +73,9 @@ required_files = ["DODI Repacks/"]
 optional_files = ["_Redist/"]
 confidence_boost = ["steam_api.dll"]
 
+# Scene release -- identified by the presence of an .nfo file.
+# Scene releases sometimes split the game across multiple disc directories.
+# No store is assumed since scene releases can come from any source.
 [scene]
 name = "Scene Release"
 crack_type = "Scene"
