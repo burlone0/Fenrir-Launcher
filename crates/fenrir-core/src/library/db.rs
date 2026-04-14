@@ -234,6 +234,7 @@ fn parse_game_status(s: &str) -> GameStatus {
         "Detected" => GameStatus::Detected,
         "Configured" => GameStatus::Configured,
         "Ready" => GameStatus::Ready,
+        "NeedsConfirmation" => GameStatus::NeedsConfirmation,
         _ => GameStatus::Broken,
     }
 }
@@ -336,5 +337,140 @@ mod tests {
         let results = db.find_by_title("elden").unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Elden Ring");
+    }
+
+    #[test]
+    fn test_get_game_nonexistent_returns_none() {
+        let db = Database::open_in_memory().unwrap();
+        let result = db.get_game(Uuid::new_v4()).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_update_game_nonexistent_returns_error() {
+        let db = Database::open_in_memory().unwrap();
+        let game = make_test_game("Ghost");
+        let err = db.update_game(&game).unwrap_err();
+        assert!(matches!(err, DatabaseError::GameNotFound(_)));
+    }
+
+    #[test]
+    fn test_find_by_title_no_results() {
+        let db = Database::open_in_memory().unwrap();
+        db.insert_game(&make_test_game("Elden Ring")).unwrap();
+        let results = db.find_by_title("nonexistent_xyz_abc").unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_open_creates_file_and_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        assert!(db_path.exists());
+        let count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='games'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_store_origin_gog_and_gogrip_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        let mut game = make_test_game("GOG Game");
+        game.store_origin = StoreOrigin::GOG;
+        game.crack_type = Some(CrackType::GOGRip);
+        let id = game.id;
+        db.insert_game(&game).unwrap();
+        let fetched = db.get_game(id).unwrap().unwrap();
+        assert_eq!(fetched.store_origin, StoreOrigin::GOG);
+        assert_eq!(fetched.crack_type, Some(CrackType::GOGRip));
+    }
+
+    #[test]
+    fn test_store_origin_epic_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        let mut game = make_test_game("Epic Game");
+        game.store_origin = StoreOrigin::Epic;
+        game.crack_type = None;
+        let id = game.id;
+        db.insert_game(&game).unwrap();
+        let fetched = db.get_game(id).unwrap().unwrap();
+        assert_eq!(fetched.store_origin, StoreOrigin::Epic);
+        assert!(fetched.crack_type.is_none());
+    }
+
+    #[test]
+    fn test_store_origin_unknown_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        let mut game = make_test_game("Unknown Store Game");
+        game.store_origin = StoreOrigin::Unknown;
+        let id = game.id;
+        db.insert_game(&game).unwrap();
+        let fetched = db.get_game(id).unwrap().unwrap();
+        assert_eq!(fetched.store_origin, StoreOrigin::Unknown);
+    }
+
+    #[test]
+    fn test_crack_type_all_variants_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        for (i, ct) in [
+            CrackType::OnlineFix,
+            CrackType::DODI,
+            CrackType::FitGirl,
+            CrackType::Scene,
+        ]
+        .iter()
+        .enumerate()
+        {
+            let mut game = make_test_game(&format!("Crack Game {i}"));
+            game.crack_type = Some(*ct);
+            let id = game.id;
+            db.insert_game(&game).unwrap();
+            let fetched = db.get_game(id).unwrap().unwrap();
+            assert_eq!(fetched.crack_type, Some(*ct));
+        }
+    }
+
+    #[test]
+    fn test_game_status_ready_and_broken_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        for (i, status) in [GameStatus::Ready, GameStatus::Broken].iter().enumerate() {
+            let mut game = make_test_game(&format!("Status Game {i}"));
+            game.status = *status;
+            let id = game.id;
+            db.insert_game(&game).unwrap();
+            let fetched = db.get_game(id).unwrap().unwrap();
+            assert_eq!(fetched.status, *status);
+        }
+    }
+
+    #[test]
+    fn test_game_status_needs_confirmation_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        let mut game = make_test_game("Pending Game");
+        game.status = GameStatus::NeedsConfirmation;
+        let id = game.id;
+        db.insert_game(&game).unwrap();
+        let fetched = db.get_game(id).unwrap().unwrap();
+        assert_eq!(fetched.status, GameStatus::NeedsConfirmation);
+    }
+
+    #[test]
+    fn test_last_played_and_user_overrides_roundtrip() {
+        let db = Database::open_in_memory().unwrap();
+        let mut game = make_test_game("Played Game");
+        game.last_played = Some(Utc::now());
+        game.user_overrides = Some(serde_json::json!({"key": "value"}));
+        let id = game.id;
+        db.insert_game(&game).unwrap();
+        let fetched = db.get_game(id).unwrap().unwrap();
+        assert!(fetched.last_played.is_some());
+        assert!(fetched.user_overrides.is_some());
     }
 }

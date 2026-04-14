@@ -44,6 +44,7 @@ pub enum GameStatus {
     Configured,
     Ready,
     Broken,
+    NeedsConfirmation,
 }
 
 impl std::fmt::Display for StoreOrigin {
@@ -77,6 +78,7 @@ impl std::fmt::Display for GameStatus {
             Self::Configured => write!(f, "Configured"),
             Self::Ready => write!(f, "Ready"),
             Self::Broken => write!(f, "Broken"),
+            Self::NeedsConfirmation => write!(f, "NeedsConfirmation"),
         }
     }
 }
@@ -109,5 +111,9 @@ mod tests {
         assert_eq!(GameStatus::Configured.to_string(), "Configured");
         assert_eq!(GameStatus::Ready.to_string(), "Ready");
         assert_eq!(GameStatus::Broken.to_string(), "Broken");
+        assert_eq!(
+            GameStatus::NeedsConfirmation.to_string(),
+            "NeedsConfirmation"
+        );
     }
 }
