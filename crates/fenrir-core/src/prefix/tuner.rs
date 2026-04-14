@@ -63,3 +63,72 @@ pub fn apply_profile(
         profile_name: profile.profile.name.clone(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::prefix::profile::WineProfile;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    // Profile with no dll_overrides: set_dll_overrides returns immediately without
+    // invoking wine, so these tests run without any Wine binary on the system.
+    const BASE_PROFILE: &str = r#"
+[profile]
+name = "base"
+description = "Base test profile"
+
+[wine]
+windows_version = "win10"
+dll_overrides = []
+
+[env]
+PROFILE_VAR = "profile_value"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = false
+"#;
+
+    #[test]
+    fn test_apply_profile_returns_profile_name() {
+        let dir = tempdir().unwrap();
+        let profile = WineProfile::parse(BASE_PROFILE).unwrap();
+        let result = apply_profile(dir.path(), Path::new("/nonexistent"), &profile, None).unwrap();
+        assert_eq!(result.profile_name, "base");
+    }
+
+    #[test]
+    fn test_apply_profile_builds_env_from_features() {
+        let dir = tempdir().unwrap();
+        let profile = WineProfile::parse(BASE_PROFILE).unwrap();
+        let result = apply_profile(dir.path(), Path::new("/nonexistent"), &profile, None).unwrap();
+        // esync = true → WINEESYNC = 1
+        assert_eq!(result.env_vars.get("WINEESYNC").unwrap(), "1");
+        // fsync = false → WINEFSYNC absent
+        assert!(!result.env_vars.contains_key("WINEFSYNC"));
+    }
+
+    #[test]
+    fn test_apply_profile_includes_custom_profile_env() {
+        let dir = tempdir().unwrap();
+        let profile = WineProfile::parse(BASE_PROFILE).unwrap();
+        let result = apply_profile(dir.path(), Path::new("/nonexistent"), &profile, None).unwrap();
+        assert_eq!(result.env_vars.get("PROFILE_VAR").unwrap(), "profile_value");
+    }
+
+    #[test]
+    fn test_apply_profile_user_env_overrides_profile_env() {
+        let dir = tempdir().unwrap();
+        let profile = WineProfile::parse(BASE_PROFILE).unwrap();
+        let overrides = serde_json::json!({
+            "env_vars": { "PROFILE_VAR": "user_value" }
+        });
+        let result =
+            apply_profile(dir.path(), Path::new("/nonexistent"), &profile, Some(&overrides))
+                .unwrap();
+        assert_eq!(result.env_vars.get("PROFILE_VAR").unwrap(), "user_value");
+    }
+}

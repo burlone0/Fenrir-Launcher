@@ -69,3 +69,50 @@ pub fn monitor_process(mut child: Child, log_path: &Path) -> LaunchResult {
         play_time_secs: play_time,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Command, Stdio};
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_monitor_exit_zero() {
+        let child = Command::new("/usr/bin/true")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let dir = tempdir().unwrap();
+        let result = monitor_process(child, &dir.path().join("game.log"));
+        assert_eq!(result.exit_code, Some(0));
+    }
+
+    #[test]
+    fn test_monitor_exit_nonzero() {
+        let child = Command::new("/usr/bin/false")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let dir = tempdir().unwrap();
+        let result = monitor_process(child, &dir.path().join("game.log"));
+        assert_eq!(result.exit_code, Some(1));
+    }
+
+    #[test]
+    fn test_monitor_writes_stdout_to_log() {
+        let child = Command::new("/usr/bin/echo")
+            .arg("hello fenrir")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let dir = tempdir().unwrap();
+        let log = dir.path().join("game.log");
+        let result = monitor_process(child, &log);
+        assert_eq!(result.exit_code, Some(0));
+        let content = std::fs::read_to_string(&log).unwrap();
+        assert!(content.contains("hello fenrir"), "log: {content}");
+    }
+}
