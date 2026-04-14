@@ -420,8 +420,8 @@ fsync = true
 #[test]
 fn test_steam_generic_64_signature_exists_in_data_dir() {
     // CARGO_MANIFEST_DIR = crates/fenrir-core/ → ../../data/signatures = repo root
-    let sigs_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../data/signatures");
+    let sigs_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
     let sigs = signatures::load_signatures_from_dir(&sigs_dir).unwrap();
     let sig = sigs
         .iter()
@@ -433,8 +433,7 @@ fn test_steam_generic_64_signature_exists_in_data_dir() {
     );
     let sig = sig.unwrap();
     assert!(
-        sig.required_files
-            .contains(&"steam_api64.dll".to_string()),
+        sig.required_files.contains(&"steam_api64.dll".to_string()),
         "steam_api64.dll must be a required file"
     );
     assert!(
@@ -469,7 +468,10 @@ confidence_boost = ["steam_emu.ini", "cream_api.ini"]
         .chain(result.needs_confirmation.iter())
         .collect();
     assert_eq!(all.len(), 1, "64-bit only game must be detected");
-    assert_eq!(all[0].store_origin, fenrir_core::library::game::StoreOrigin::Steam);
+    assert_eq!(
+        all[0].store_origin,
+        fenrir_core::library::game::StoreOrigin::Steam
+    );
     // steam_api64.dll (30) + steam_appid.txt (15) = 45 → needs_confirmation
     assert_eq!(all[0].confidence, 45);
 }
@@ -505,7 +507,11 @@ confidence_boost = ["steam_settings/"]
         .iter()
         .chain(result.needs_confirmation.iter())
         .collect();
-    assert_eq!(all.len(), 1, "game must be detected even without OnlineFix.url");
+    assert_eq!(
+        all.len(),
+        1,
+        "game must be detected even without OnlineFix.url"
+    );
     assert_eq!(
         all[0].crack_type,
         Some(fenrir_core::library::game::CrackType::OnlineFix)
