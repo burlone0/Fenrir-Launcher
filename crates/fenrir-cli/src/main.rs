@@ -39,6 +39,11 @@ enum Commands {
         #[arg(short, long)]
         value: Option<String>,
     },
+    /// Confirm a low-confidence game and add it to the library
+    Confirm {
+        /// Game title or UUID
+        query: String,
+    },
     /// Configure a game (create prefix + apply tuning profile)
     Configure {
         /// Game title or UUID
@@ -80,6 +85,7 @@ fn main() {
         Commands::Info { game } => commands::info::run(&game),
         Commands::Add { path } => commands::add::run(&path),
         Commands::Config { set, value } => commands::config_cmd::run(set, value),
+        Commands::Confirm { ref query } => commands::confirm::run(query),
         Commands::Configure { ref query } => commands::configure::run(query),
         Commands::Launch { ref query } => commands::launch::run(query),
         Commands::Runtime { ref action } => match action {

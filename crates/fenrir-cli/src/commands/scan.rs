@@ -63,17 +63,32 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
-        if !result.needs_confirmation.is_empty() {
-            println!("\nNeed confirmation:");
-            for classified in &result.needs_confirmation {
-                println!(
-                    "  [?] {} ({:?}) — confidence: {} — {}",
-                    classified.title,
-                    classified.crack_type,
-                    classified.confidence,
-                    classified.path.display(),
-                );
-            }
+        for classified in &result.needs_confirmation {
+            let game = Game {
+                id: uuid::Uuid::new_v4(),
+                title: classified.title.clone(),
+                executable: classified.exe_files.first().cloned().unwrap_or_default(),
+                install_dir: classified.path.clone(),
+                store_origin: classified.store_origin,
+                crack_type: classified.crack_type,
+                prefix_path: PathBuf::new(),
+                runtime_id: None,
+                status: GameStatus::NeedsConfirmation,
+                play_time: 0,
+                last_played: None,
+                added_at: chrono::Utc::now(),
+                user_overrides: None,
+            };
+
+            db.insert_game(&game)?;
+            println!(
+                "  [?] {} ({}, {:?}) — confidence: {} — run 'fenrir confirm \"{}\"' to add",
+                classified.title,
+                classified.store_origin,
+                classified.crack_type,
+                classified.confidence,
+                classified.title,
+            );
         }
     }
 
@@ -81,19 +96,29 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load_signatures() -> Result<Vec<signatures::Signature>, Box<dyn std::error::Error>> {
-    // Try relative to binary first, then CWD
-    let candidates = [
+    let candidates: Vec<PathBuf> = [
+        // Relative to binary (works for dev builds at target/debug/ and installed binaries)
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|p| p.join("../../../data/signatures"))),
+            .and_then(|p| {
+                p.parent()
+                    .map(|dir| dir.join("../../data/signatures").canonicalize().ok())
+            })
+            .flatten(),
+        // XDG data dir (installed path)
+        dirs::data_dir().map(|d| d.join("fenrir/signatures")),
+        // CWD fallback (running from repo root in development)
         Some(PathBuf::from("data/signatures")),
-    ];
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
 
-    for candidate in candidates.iter().flatten() {
+    for candidate in &candidates {
         if candidate.exists() {
             return Ok(signatures::load_signatures_from_dir(candidate)?);
         }
     }
 
-    Err("signatures directory not found. Ensure data/signatures/ exists.".into())
+    Err("signatures directory not found. Checked: binary-relative, ~/.local/share/fenrir/signatures/, data/signatures/".into())
 }

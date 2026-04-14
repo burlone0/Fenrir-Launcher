@@ -1,5 +1,67 @@
 use std::path::PathBuf;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_error_display() {
+        let e = ConfigError::NotFound(PathBuf::from("/etc/fenrir/config.toml"));
+        assert!(e.to_string().contains("config file not found"));
+
+        let e = ConfigError::Parse("unexpected key".to_string());
+        assert!(e.to_string().contains("failed to parse config"));
+    }
+
+    #[test]
+    fn test_database_error_display() {
+        let e = DatabaseError::GameNotFound(uuid::Uuid::nil());
+        assert!(e.to_string().contains("game not found"));
+
+        let e = DatabaseError::Migration("table missing".to_string());
+        assert!(e.to_string().contains("migration failed"));
+    }
+
+    #[test]
+    fn test_scanner_error_display() {
+        let e = ScannerError::DirNotFound(PathBuf::from("/mnt/games"));
+        assert!(e.to_string().contains("scan directory not found"));
+
+        let e = ScannerError::SignatureLoad("bad toml".to_string());
+        assert!(e.to_string().contains("failed to read signatures"));
+    }
+
+    #[test]
+    fn test_runtime_error_display() {
+        let e = RuntimeError::NotFound("GE-Proton9-20".to_string());
+        assert!(e.to_string().contains("runtime not found"));
+
+        let e = RuntimeError::NoRuntimeAvailable;
+        assert!(e.to_string().contains("wine/proton not available"));
+    }
+
+    #[test]
+    fn test_prefix_error_display() {
+        let e = PrefixError::WinebootFailed("exit code 1".to_string());
+        assert!(e.to_string().contains("wineboot failed"));
+
+        let e = PrefixError::Directory("no such dir".to_string());
+        assert!(e.to_string().contains("prefix directory error"));
+    }
+
+    #[test]
+    fn test_launcher_error_display() {
+        let e = LauncherError::NotConfigured(uuid::Uuid::nil());
+        assert!(e.to_string().contains("game not configured"));
+
+        let e = LauncherError::ExeNotFound(PathBuf::from("/games/game.exe"));
+        assert!(e.to_string().contains("executable not found"));
+
+        let e = LauncherError::LaunchFailed("no such file".to_string());
+        assert!(e.to_string().contains("launch failed"));
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum FenrirError {
     #[error("config error: {0}")]

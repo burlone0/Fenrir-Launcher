@@ -166,4 +166,29 @@ mod tests {
     fn test_check_system_wine_nonexistent() {
         assert!(check_system_wine_at("/nonexistent/path/wine").is_none());
     }
+
+    #[test]
+    fn test_check_system_wine_existing() {
+        // /usr/bin/wine is guaranteed to exist in this dev environment
+        if std::path::Path::new("/usr/bin/wine").exists() {
+            let rt = check_system_wine_at("/usr/bin/wine").unwrap();
+            assert_eq!(rt.id, "system-wine");
+            assert_eq!(rt.runtime_type, RuntimeType::Wine);
+            assert_eq!(rt.source, RuntimeSource::System);
+            assert!(!rt.is_default);
+        }
+    }
+
+    #[test]
+    fn test_discover_all_returns_at_least_system_wine() {
+        // discover_all searches Fenrir runtimes dir, Steam compat dirs, and /usr/bin/wine.
+        // Wine is installed in this environment, so we expect at least one runtime.
+        let empty_dir = tempfile::tempdir().unwrap();
+        let runtimes = discover_all(empty_dir.path());
+        assert!(
+            !runtimes.is_empty(),
+            "discover_all must find at least system Wine when /usr/bin/wine exists"
+        );
+        assert!(runtimes.iter().any(|r| r.id == "system-wine"));
+    }
 }
