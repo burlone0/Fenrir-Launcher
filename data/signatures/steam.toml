@@ -40,15 +40,25 @@ required_files = ["steam_api.dll"]
 optional_files = ["steam_api64.dll", "steam_appid.txt"]
 confidence_boost = ["steam_emu.ini", "cream_api.ini"]
 
-# OnlineFix -- identifiable by the OnlineFix.url shortcut file.
-# These cracks often include custom steamclient DLLs and a steam_settings/
+# Generic Steam crack for 64-bit only games -- covers modern titles that ship
+# steam_api64.dll without the 32-bit steam_api.dll counterpart.
+[steam_generic_64]
+name = "Steam Generic Crack (64-bit)"
+store = "Steam"
+required_files = ["steam_api64.dll"]
+optional_files = ["steam_api.dll", "steam_appid.txt"]
+confidence_boost = ["steam_emu.ini", "cream_api.ini"]
+
+# OnlineFix -- identified by OnlineFix.ini, the crack config required for execution.
+# OnlineFix.url is a website shortcut that users routinely delete; it must not be
+# required. These cracks often include custom steamclient DLLs and a steam_settings/
 # directory for LAN/online play emulation.
 [onlinefix]
 name = "OnlineFix"
 store = "Steam"
 crack_type = "OnlineFix"
-required_files = ["OnlineFix.url"]
-optional_files = ["OnlineFix64.dll", "steamclient.dll"]
+required_files = ["OnlineFix.ini"]
+optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
 
 # FitGirl Repack -- identified by the fitgirl-repacks.site marker file.

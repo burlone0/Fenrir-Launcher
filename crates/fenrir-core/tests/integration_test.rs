@@ -348,7 +348,7 @@ fn test_onlinefix_detection_and_profile_match() {
     let game_dir = games_dir.path().join("Some Game");
     fs::create_dir(&game_dir).unwrap();
     fs::write(game_dir.join("game.exe"), "fake").unwrap();
-    fs::write(game_dir.join("OnlineFix.url"), "fake").unwrap();
+    fs::write(game_dir.join("OnlineFix.ini"), "fake").unwrap();
     fs::write(game_dir.join("OnlineFix64.dll"), "fake").unwrap();
     fs::write(game_dir.join("steam_api.dll"), "fake").unwrap();
 
@@ -357,9 +357,9 @@ fn test_onlinefix_detection_and_profile_match() {
 name = "OnlineFix"
 store = "Steam"
 crack_type = "OnlineFix"
-required_files = ["OnlineFix.url"]
-optional_files = ["OnlineFix64.dll", "steamclient.dll"]
-confidence_boost = []
+required_files = ["OnlineFix.ini"]
+optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
+confidence_boost = ["steam_settings/"]
 
 [steam_generic]
 name = "Steam Generic Crack"
@@ -411,4 +411,105 @@ fsync = true
     assert!(profiles.contains_key("onlinefix"));
     let profile = &profiles["onlinefix"];
     assert!(profile.env.contains_key("OPENSSL_ia32cap"));
+}
+
+// ---------------------------------------------------------------------------
+// Test 9: steam_generic_64 signature exists in data files and detects 64-bit games
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_steam_generic_64_signature_exists_in_data_dir() {
+    // CARGO_MANIFEST_DIR = crates/fenrir-core/ → ../../data/signatures = repo root
+    let sigs_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/signatures");
+    let sigs = signatures::load_signatures_from_dir(&sigs_dir).unwrap();
+    let sig = sigs
+        .iter()
+        .find(|s| s.name == "Steam Generic Crack (64-bit)");
+    assert!(
+        sig.is_some(),
+        "steam_generic_64 signature must exist in data/signatures/ — \
+         many modern games ship only steam_api64.dll without steam_api.dll"
+    );
+    let sig = sig.unwrap();
+    assert!(
+        sig.required_files
+            .contains(&"steam_api64.dll".to_string()),
+        "steam_api64.dll must be a required file"
+    );
+    assert!(
+        !sig.required_files.contains(&"steam_api.dll".to_string()),
+        "steam_api.dll must NOT be required in the 64-bit signature"
+    );
+}
+
+#[test]
+fn test_steam_api64_only_game_is_detected() {
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Animal Well");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("AnimalWell.exe"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_appid.txt"), "813230").unwrap();
+
+    let sig_toml = r#"
+[steam_generic_64]
+name = "Steam Generic Crack (64-bit)"
+store = "Steam"
+required_files = ["steam_api64.dll"]
+optional_files = ["steam_api.dll", "steam_appid.txt"]
+confidence_boost = ["steam_emu.ini", "cream_api.ini"]
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+    assert_eq!(all.len(), 1, "64-bit only game must be detected");
+    assert_eq!(all[0].store_origin, fenrir_core::library::game::StoreOrigin::Steam);
+    // steam_api64.dll (30) + steam_appid.txt (15) = 45 → needs_confirmation
+    assert_eq!(all[0].confidence, 45);
+}
+
+// ---------------------------------------------------------------------------
+// Test 10: OnlineFix detected without OnlineFix.url (users routinely delete it)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_onlinefix_detected_without_url_file() {
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Scam Line");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("Scam Line.exe"), "fake").unwrap();
+    // OnlineFix.url is intentionally absent — user deleted it
+    fs::write(game_dir.join("OnlineFix.ini"), "fake").unwrap();
+    fs::write(game_dir.join("OnlineFix64.dll"), "fake").unwrap();
+
+    let sig_toml = r#"
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["OnlineFix.ini"]
+optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
+confidence_boost = ["steam_settings/"]
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+    assert_eq!(all.len(), 1, "game must be detected even without OnlineFix.url");
+    assert_eq!(
+        all[0].crack_type,
+        Some(fenrir_core::library::game::CrackType::OnlineFix)
+    );
+    // OnlineFix.ini (30) + OnlineFix64.dll (15) = 45 → needs_confirmation
+    assert_eq!(all[0].confidence, 45);
 }
