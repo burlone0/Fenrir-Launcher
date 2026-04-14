@@ -1,15 +1,48 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: Steam Generic
+# =============================================================================
+#
+# Applied to games detected as generic Steam cracks (steam_api.dll present,
+# no specific crack type identified). This is the default fallback profile.
+#
+# Profiles configure the WINEPREFIX for a game: DLL overrides, feature flags,
+# environment variables, and Windows version. Fenrir applies the profile
+# during `fenrir configure <game>`.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
 [profile]
 name = "steam_generic"
 description = "Default profile for Steam cracked games"
 
 [wine]
+# Pretend to be Windows 10. Most modern games expect it.
 windows_version = "win10"
+
+# DLL overrides -- format is "dllname=type" where type is:
+#   n = native (use the DLL shipped with the game)
+#   b = builtin (use Wine's built-in version)
+#   n,b = try native first, fall back to builtin
+#
+# For cracked games, we want the crack's steam_api DLLs, not Wine's.
 dll_overrides = ["steam_api=n", "steam_api64=n"]
 
 [env]
+# No extra environment variables needed for generic Steam cracks.
 
 [features]
+# DXVK -- translates DirectX 9/10/11 to Vulkan. Massive performance boost
+# on Linux. Almost always worth enabling.
 dxvk = true
+
+# VKD3D -- translates DirectX 12 to Vulkan. Only needed for DX12 games.
+# Off by default since most cracked games are DX11 or older.
 vkd3d = false
+
+# esync/fsync -- Wine synchronization primitives that reduce CPU overhead.
+# esync uses eventfd, fsync uses futex. fsync is faster but needs kernel
+# support (most modern kernels have it). Both can be enabled simultaneously;
+# Wine picks the best available.
 esync = true
 fsync = true

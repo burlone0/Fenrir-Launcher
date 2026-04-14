@@ -24,9 +24,8 @@ pub fn parse_signatures_from_str(content: &str) -> Result<Vec<Signature>, Scanne
 pub fn load_signatures_from_dir(dir: &Path) -> Result<Vec<Signature>, ScannerError> {
     let mut signatures = Vec::new();
 
-    let entries = std::fs::read_dir(dir).map_err(|_| {
-        ScannerError::SignatureLoad(format!("cannot read dir: {}", dir.display()))
-    })?;
+    let entries = std::fs::read_dir(dir)
+        .map_err(|_| ScannerError::SignatureLoad(format!("cannot read dir: {}", dir.display())))?;
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -70,7 +69,10 @@ confidence_boost = []
     #[test]
     fn test_signature_fields() {
         let sigs = parse_signatures_from_str(TEST_TOML).unwrap();
-        let steam = sigs.iter().find(|s| s.name == "Steam Generic Crack").unwrap();
+        let steam = sigs
+            .iter()
+            .find(|s| s.name == "Steam Generic Crack")
+            .unwrap();
         assert_eq!(steam.store, Some("Steam".to_string()));
         assert!(steam.required_files.contains(&"steam_api.dll".to_string()));
     }
