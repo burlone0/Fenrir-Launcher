@@ -81,19 +81,26 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load_signatures() -> Result<Vec<signatures::Signature>, Box<dyn std::error::Error>> {
-    // Try relative to binary first, then CWD
-    let candidates = [
+    let candidates: Vec<PathBuf> = [
+        // Relative to binary (works for dev builds at target/debug/ and installed binaries)
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|p| p.join("../../../data/signatures"))),
+            .and_then(|p| p.parent().map(|dir| dir.join("../../data/signatures").canonicalize().ok()))
+            .flatten(),
+        // XDG data dir (installed path)
+        dirs::data_dir().map(|d| d.join("fenrir/signatures")),
+        // CWD fallback (running from repo root in development)
         Some(PathBuf::from("data/signatures")),
-    ];
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
 
-    for candidate in candidates.iter().flatten() {
+    for candidate in &candidates {
         if candidate.exists() {
             return Ok(signatures::load_signatures_from_dir(candidate)?);
         }
     }
 
-    Err("signatures directory not found. Ensure data/signatures/ exists.".into())
+    Err("signatures directory not found. Checked: binary-relative, ~/.local/share/fenrir/signatures/, data/signatures/".into())
 }
