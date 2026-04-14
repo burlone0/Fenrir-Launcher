@@ -11,7 +11,11 @@ pub fn prefix_path_for_game(prefix_dir: &Path, game_id: Uuid) -> PathBuf {
 }
 
 /// Create and initialize a WINEPREFIX.
-pub fn create_prefix(prefix_path: &Path, wine_binary: &Path, is_proton: bool) -> Result<(), PrefixError> {
+pub fn create_prefix(
+    prefix_path: &Path,
+    wine_binary: &Path,
+    is_proton: bool,
+) -> Result<(), PrefixError> {
     std::fs::create_dir_all(prefix_path).map_err(|e| PrefixError::Directory(e.to_string()))?;
 
     info!("initializing prefix at {}", prefix_path.display());

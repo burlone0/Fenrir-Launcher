@@ -126,9 +126,13 @@ fsync = false
         let overrides = serde_json::json!({
             "env_vars": { "PROFILE_VAR": "user_value" }
         });
-        let result =
-            apply_profile(dir.path(), Path::new("/nonexistent"), &profile, Some(&overrides))
-                .unwrap();
+        let result = apply_profile(
+            dir.path(),
+            Path::new("/nonexistent"),
+            &profile,
+            Some(&overrides),
+        )
+        .unwrap();
         assert_eq!(result.env_vars.get("PROFILE_VAR").unwrap(), "user_value");
     }
 }
