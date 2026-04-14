@@ -8,6 +8,7 @@ use signatures::Signature;
 use std::path::Path;
 use tracing::info;
 
+#[derive(Debug)]
 pub struct ScanResult {
     pub high_confidence: Vec<ClassifiedGame>,
     pub needs_confirmation: Vec<ClassifiedGame>,
@@ -55,4 +56,17 @@ pub fn scan_directory(
         needs_confirmation,
         total_candidates,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_nonexistent_dir_returns_error() {
+        let result = scan_directory(std::path::Path::new("/nonexistent/path/abc"), &[], 4);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("scan directory not found"));
+    }
 }

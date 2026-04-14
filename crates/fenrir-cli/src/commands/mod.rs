@@ -1,6 +1,7 @@
 pub mod add;
 pub mod config_cmd;
 pub mod configure;
+pub mod confirm;
 pub mod info;
 pub mod launch;
 pub mod list;

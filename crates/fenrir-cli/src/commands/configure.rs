@@ -3,7 +3,7 @@ use fenrir_core::library::db::Database;
 use fenrir_core::library::game::GameStatus;
 use fenrir_core::prefix;
 use fenrir_core::prefix::profile::load_profiles_from_dir;
-use fenrir_core::runtime;
+use fenrir_core::runtime::{self, RuntimeType};
 use std::path::PathBuf;
 
 pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -31,10 +31,13 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Create prefix
     let prefix_path = prefix::prefix_path_for_game(&config.general.prefix_dir, game.id);
-    let wine_bin = find_wine_binary(rt);
+    // For prefix operations (wineboot, regedit) always use the underlying Wine binary.
+    // Proton's wrapper script requires Steam env vars we don't have at configure time.
+    let is_proton = matches!(rt.runtime_type, RuntimeType::Proton | RuntimeType::ProtonGE);
+    let wine_for_ops = find_wine_for_prefix_ops(rt, is_proton);
 
     println!("  creating prefix at {}...", prefix_path.display());
-    prefix::create_prefix(&prefix_path, &wine_bin)?;
+    prefix::create_prefix(&prefix_path, &wine_for_ops, false)?;
 
     // 3. Load and apply profile
     let profiles_dir = find_profiles_dir();
@@ -46,7 +49,7 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
             println!("  applying profile '{}'...", profile_name);
             prefix::apply_profile(
                 &prefix_path,
-                &wine_bin,
+                &wine_for_ops,
                 profile,
                 game.user_overrides.as_ref(),
             )?;
@@ -66,6 +69,7 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Returns the launch binary for the runtime (proton script for Proton, wine for Wine).
 fn find_wine_binary(rt: &fenrir_core::runtime::Runtime) -> PathBuf {
     let proton = rt.path.join("proton");
     if proton.exists() {
@@ -76,6 +80,19 @@ fn find_wine_binary(rt: &fenrir_core::runtime::Runtime) -> PathBuf {
         return wine;
     }
     PathBuf::from("/usr/bin/wine")
+}
+
+/// Returns the Wine binary suitable for prefix operations (wineboot, regedit).
+/// For Proton runtimes, this is the internal files/bin/wine, which works without
+/// Steam environment variables that the proton wrapper script requires.
+fn find_wine_for_prefix_ops(rt: &fenrir_core::runtime::Runtime, is_proton: bool) -> PathBuf {
+    if is_proton {
+        let internal = rt.path.join("files/bin/wine");
+        if internal.exists() {
+            return internal;
+        }
+    }
+    find_wine_binary(rt)
 }
 
 fn find_profiles_dir() -> Option<PathBuf> {

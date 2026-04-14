@@ -44,6 +44,7 @@ pub enum GameStatus {
     Configured,
     Ready,
     Broken,
+    NeedsConfirmation,
 }
 
 impl std::fmt::Display for StoreOrigin {
@@ -77,6 +78,42 @@ impl std::fmt::Display for GameStatus {
             Self::Configured => write!(f, "Configured"),
             Self::Ready => write!(f, "Ready"),
             Self::Broken => write!(f, "Broken"),
+            Self::NeedsConfirmation => write!(f, "NeedsConfirmation"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_store_origin_display() {
+        assert_eq!(StoreOrigin::Steam.to_string(), "Steam");
+        assert_eq!(StoreOrigin::GOG.to_string(), "GOG");
+        assert_eq!(StoreOrigin::Epic.to_string(), "Epic");
+        assert_eq!(StoreOrigin::Unknown.to_string(), "Unknown");
+    }
+
+    #[test]
+    fn test_crack_type_display() {
+        assert_eq!(CrackType::OnlineFix.to_string(), "OnlineFix");
+        assert_eq!(CrackType::DODI.to_string(), "DODI");
+        assert_eq!(CrackType::FitGirl.to_string(), "FitGirl");
+        assert_eq!(CrackType::Scene.to_string(), "Scene");
+        assert_eq!(CrackType::GOGRip.to_string(), "GOG Rip");
+        assert_eq!(CrackType::Unknown.to_string(), "Unknown");
+    }
+
+    #[test]
+    fn test_game_status_display() {
+        assert_eq!(GameStatus::Detected.to_string(), "Detected");
+        assert_eq!(GameStatus::Configured.to_string(), "Configured");
+        assert_eq!(GameStatus::Ready.to_string(), "Ready");
+        assert_eq!(GameStatus::Broken.to_string(), "Broken");
+        assert_eq!(
+            GameStatus::NeedsConfirmation.to_string(),
+            "NeedsConfirmation"
+        );
     }
 }

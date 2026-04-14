@@ -85,4 +85,35 @@ confidence_boost = []
         let sigs = load_signatures_from_dir(dir.path()).unwrap();
         assert_eq!(sigs.len(), 2);
     }
+
+    // OnlineFix.url is a website shortcut that users routinely delete.
+    // The invariant file is OnlineFix.ini (crack config, required for execution).
+    #[test]
+    fn test_onlinefix_required_file_is_ini_not_url() {
+        let sigs = parse_signatures_from_str(
+            r#"
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["OnlineFix.ini"]
+optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
+confidence_boost = ["steam_settings/"]
+"#,
+        )
+        .unwrap();
+        let sig = sigs.iter().find(|s| s.name == "OnlineFix").unwrap();
+        assert!(
+            sig.required_files.contains(&"OnlineFix.ini".to_string()),
+            "OnlineFix.ini must be required"
+        );
+        assert!(
+            !sig.required_files.contains(&"OnlineFix.url".to_string()),
+            "OnlineFix.url must NOT be required — users delete it"
+        );
+        assert!(
+            sig.optional_files.contains(&"OnlineFix64.dll".to_string()),
+            "OnlineFix64.dll should be optional"
+        );
+    }
 }

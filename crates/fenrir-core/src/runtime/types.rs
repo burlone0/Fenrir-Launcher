@@ -46,3 +46,23 @@ impl std::fmt::Display for RuntimeSource {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_runtime_type_display() {
+        assert_eq!(RuntimeType::Wine.to_string(), "Wine");
+        assert_eq!(RuntimeType::Proton.to_string(), "Proton");
+        assert_eq!(RuntimeType::ProtonGE.to_string(), "GE-Proton");
+        assert_eq!(RuntimeType::WineGE.to_string(), "Wine-GE");
+    }
+
+    #[test]
+    fn test_runtime_source_display() {
+        assert_eq!(RuntimeSource::System.to_string(), "System");
+        assert_eq!(RuntimeSource::Steam.to_string(), "Steam");
+        assert_eq!(RuntimeSource::Downloaded.to_string(), "Downloaded");
+    }
+}
