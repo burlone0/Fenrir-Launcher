@@ -1,11 +1,18 @@
 mod commands;
 
 use clap::Parser;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(name = "fenrir", about = "Fenrir Game Launcher", version)]
 struct Cli {
+    /// Enable verbose output (sets log level to debug/trace)
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    /// Suppress all output except errors
+    #[arg(short, long, global = true)]
+    quiet: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -73,11 +80,8 @@ enum RuntimeAction {
 }
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let cli = Cli::parse();
+    init_tracing(cli.verbose, cli.quiet);
 
     let result = match cli.command {
         Commands::Scan { path } => commands::scan::run(path),
@@ -101,6 +105,24 @@ fn main() {
         }
         std::process::exit(1);
     }
+}
+
+fn init_tracing(verbose: bool, quiet: bool) {
+    let filter = if verbose {
+        tracing_subscriber::EnvFilter::new("debug,fenrir_core=trace,fenrir_cli=trace")
+    } else if quiet {
+        tracing_subscriber::EnvFilter::new("error")
+    } else {
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,fenrir_core=info"))
+    };
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_file(false)
+        .init();
 }
 
 /// Walks the error source chain looking for a `FenrirError` with a suggestion.
