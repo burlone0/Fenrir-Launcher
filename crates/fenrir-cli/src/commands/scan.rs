@@ -27,6 +27,14 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     let db = Database::open(&config.general.library_db)?;
 
     for dir in &scan_dirs {
+        if !dir.exists() {
+            eprintln!("warning: scan directory not found: {}", dir.display());
+            continue;
+        }
+        if !dir.is_dir() {
+            eprintln!("warning: not a directory: {}", dir.display());
+            continue;
+        }
         println!("scanning {}...", dir.display());
         let result = scanner::scan_directory(dir, &sigs, 4)?;
         println!(

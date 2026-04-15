@@ -83,6 +83,30 @@ pub enum FenrirError {
     Launcher(#[from] LauncherError),
 }
 
+impl FenrirError {
+    /// Returns a user-facing hint on how to recover from this error.
+    pub fn suggestion(&self) -> Option<&'static str> {
+        match self {
+            Self::Config(ConfigError::NotFound(_)) => {
+                Some("Run 'fenrir config' to generate a default config file.")
+            }
+            Self::Runtime(RuntimeError::NoRuntimeAvailable) => {
+                Some("Install Wine or run 'fenrir runtime install' to download GE-Proton.")
+            }
+            Self::Scanner(ScannerError::DirNotFound(_)) => {
+                Some("Check the path exists and you have read permissions.")
+            }
+            Self::Launcher(LauncherError::ExeNotFound(_)) => {
+                Some("The game executable may have moved. Re-scan or update the path manually.")
+            }
+            Self::Launcher(LauncherError::NotConfigured(_)) => {
+                Some("Run 'fenrir configure <game>' to set up the Wine prefix.")
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("config file not found: {0}")]

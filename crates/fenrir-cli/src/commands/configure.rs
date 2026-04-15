@@ -20,6 +20,14 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("game not found")?
     };
 
+    if matches!(game.status, GameStatus::Configured | GameStatus::Ready) {
+        println!(
+            "'{}' is already configured. Re-run with --force to override (not yet implemented).",
+            game.title
+        );
+        return Ok(());
+    }
+
     println!("configuring '{}'...", game.title);
 
     // 1. Find runtime
