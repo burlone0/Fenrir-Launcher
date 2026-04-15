@@ -91,3 +91,62 @@ name = "Scene Release"
 crack_type = "Scene"
 required_files = ["*.nfo"]
 optional_files = ["cd1/", "cd2/", "disc1/"]
+
+# Goldberg Steam Emulator -- identified by the steam_settings/ directory.
+# Goldberg replaces the Steam API with a LAN/offline emulator; the directory
+# contains account name, app ID, DLC lists, and local save config.
+[goldberg]
+name = "Goldberg Steam Emu"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["steam_settings/"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = ["steam_settings/account_name.txt", "local_save.txt"]
+
+# CreamAPI -- a DLC unlocker that replaces the Steam API while keeping the
+# original Steam client active. Identified by cream_api.ini.
+[creamapi]
+name = "CreamAPI"
+store = "Steam"
+required_files = ["cream_api.ini"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = ["steam_appid.txt"]
+
+# CODEX release -- identified by codex.nfo, the Scene group's info file.
+# CODEX cracks usually ship a separate crack/ directory alongside the game.
+[codex]
+name = "CODEX"
+store = "Steam"
+crack_type = "Scene"
+required_files = ["codex.nfo"]
+optional_files = ["steam_api.dll", "crack/"]
+confidence_boost = ["codex64.dll"]
+
+# PLAZA release -- identified by plaza.nfo.
+[plaza]
+name = "PLAZA"
+store = "Steam"
+crack_type = "Scene"
+required_files = ["plaza.nfo"]
+optional_files = ["steam_api.dll"]
+confidence_boost = []
+
+# EMPRESS release -- identified by empress.nfo.
+# EMPRESS cracks often ship a 64-bit DLL alongside the nfo.
+[empress]
+name = "EMPRESS"
+store = "Steam"
+crack_type = "Scene"
+required_files = ["empress.nfo"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = ["empress64.dll"]
+
+# AnkerGames -- identified by AnkerGames.url, a website shortcut bundled with
+# the crack. Similar to OnlineFix, uses steam_settings/ for LAN emulation.
+[ankergames]
+name = "AnkerGames"
+store = "Steam"
+crack_type = "OnlineFix"
+required_files = ["AnkerGames.url"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = ["steam_settings/"]

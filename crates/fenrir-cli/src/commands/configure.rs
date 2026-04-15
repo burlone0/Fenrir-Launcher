@@ -116,6 +116,10 @@ fn crack_type_to_profile_name(
     use fenrir_core::library::game::CrackType;
     match crack_type {
         Some(CrackType::OnlineFix) => "onlinefix",
+        Some(CrackType::DODI) => "dodi",
+        Some(CrackType::FitGirl) => "fitgirl",
+        Some(CrackType::Scene) => "scene",
+        Some(CrackType::GOGRip) => "gog",
         _ => "steam_generic",
     }
 }
