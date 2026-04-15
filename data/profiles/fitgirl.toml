@@ -1,0 +1,26 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: FitGirl
+# =============================================================================
+#
+# Applied to games distributed as FitGirl repacks. After installation the
+# game directory is a standard Steam crack, so the DLL override set mirrors
+# the OnlineFix profile minus the steamclient overrides.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
+[profile]
+name = "fitgirl"
+description = "Profile for FitGirl repacks — typically Steam cracks post-install"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n"]
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true

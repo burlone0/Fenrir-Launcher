@@ -1,0 +1,26 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: GOG
+# =============================================================================
+#
+# Applied to GOG games and rips. GOG games ship DRM-free without any Steam
+# API, so no steam_api DLL overrides are needed. Galaxy DRM (GalaxyClient.dll)
+# is handled by its own Wine translation layer.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
+[profile]
+name = "gog"
+description = "Profile for GOG games — no Steam DLL overrides needed"
+
+[wine]
+windows_version = "win10"
+dll_overrides = []
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
