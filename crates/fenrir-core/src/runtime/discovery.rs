@@ -182,7 +182,10 @@ mod tests {
     #[test]
     fn test_discover_all_returns_at_least_system_wine() {
         // discover_all searches Fenrir runtimes dir, Steam compat dirs, and /usr/bin/wine.
-        // Wine is installed in this environment, so we expect at least one runtime.
+        // Only assert if Wine is actually installed on this machine.
+        if !std::path::Path::new("/usr/bin/wine").exists() {
+            return;
+        }
         let empty_dir = tempfile::tempdir().unwrap();
         let runtimes = discover_all(empty_dir.path());
         assert!(
