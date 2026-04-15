@@ -96,6 +96,21 @@ fn main() {
 
     if let Err(e) = result {
         eprintln!("error: {}", e);
+        if let Some(hint) = extract_suggestion(e.as_ref()) {
+            eprintln!("hint: {}", hint);
+        }
         std::process::exit(1);
     }
+}
+
+/// Walks the error source chain looking for a `FenrirError` with a suggestion.
+fn extract_suggestion(e: &(dyn std::error::Error + 'static)) -> Option<&'static str> {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(err) = current {
+        if let Some(fenrir_err) = err.downcast_ref::<fenrir_core::FenrirError>() {
+            return fenrir_err.suggestion();
+        }
+        current = err.source();
+    }
+    None
 }
