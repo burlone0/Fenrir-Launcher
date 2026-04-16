@@ -1,0 +1,26 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: DODI
+# =============================================================================
+#
+# Applied to games distributed as DODI repacks. Like FitGirl, the installed
+# game is a standard Steam crack; the repack-specific directories (_Redist/,
+# DODI Repacks/) are not present at runtime.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
+[profile]
+name = "dodi"
+description = "Profile for DODI repacks"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n"]
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true

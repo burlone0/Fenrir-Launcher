@@ -238,6 +238,7 @@ fn test_launch_command_wine_vs_proton() {
         env_vars: HashMap::new(),
         is_proton: false,
         proton_path: None,
+        steam_app_id: None,
     });
 
     assert_eq!(wine_cmd.program, "/usr/bin/wine");
@@ -256,6 +257,7 @@ fn test_launch_command_wine_vs_proton() {
         env_vars: HashMap::new(),
         is_proton: true,
         proton_path: Some(PathBuf::from("/runtimes/GE-Proton9-20")),
+        steam_app_id: None,
     });
 
     assert_eq!(proton_cmd.program, "/runtimes/GE-Proton9-20/proton");
@@ -479,6 +481,9 @@ confidence_boost = ["steam_emu.ini", "cream_api.ini"]
 // ---------------------------------------------------------------------------
 // Test 10: OnlineFix detected without OnlineFix.url (users routinely delete it)
 // ---------------------------------------------------------------------------
+//
+// (Tests 11-14 below cover Fase 2: GOG detection, checksum, GitHub API, profiles)
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_onlinefix_detected_without_url_file() {
@@ -518,4 +523,137 @@ confidence_boost = ["steam_settings/"]
     );
     // OnlineFix.ini (30) + OnlineFix64.dll (15) = 45 → needs_confirmation
     assert_eq!(all[0].confidence, 45);
+}
+
+// ---------------------------------------------------------------------------
+// Test 11 (Fase 2): GOG game detection via goggame-*.info glob pattern
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_gog_game_detection() {
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("The Witcher 3");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("witcher3.exe"), "fake").unwrap();
+    // GOG-specific metadata file with a glob-matched name
+    fs::write(
+        game_dir.join("goggame-1207664643.info"),
+        r#"{"gameId":"1207664643"}"#,
+    )
+    .unwrap();
+    fs::write(game_dir.join("gog.ico"), "fake").unwrap();
+
+    let sigs_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
+    let sigs = signatures::load_signatures_from_dir(&sigs_dir).unwrap();
+
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+    let all_games: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+
+    assert!(!all_games.is_empty(), "GOG game must be detected");
+    assert_eq!(
+        all_games[0].store_origin,
+        fenrir_core::library::game::StoreOrigin::GOG
+    );
+    assert_eq!(
+        all_games[0].crack_type,
+        Some(fenrir_core::library::game::CrackType::GOGRip)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 12 (Fase 2): SHA-512 checksum computation and verification
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_checksum_verification_roundtrip() {
+    use fenrir_core::runtime::downloader::{compute_sha512, verify_sha512};
+
+    let payload = b"fenrir fase2 checksum test payload";
+    let hash = compute_sha512(payload);
+
+    // Correct hash must verify
+    assert!(verify_sha512(payload, &hash));
+
+    // Different data must NOT verify against original hash
+    assert!(!verify_sha512(b"different data", &hash));
+
+    // Corrupt hash must NOT verify
+    assert!(!verify_sha512(payload, "0000000000000000"));
+
+    // Hash must be deterministic
+    assert_eq!(compute_sha512(payload), hash);
+}
+
+// ---------------------------------------------------------------------------
+// Test 13 (Fase 2): GitHub Release JSON parsing
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_github_release_parsing() {
+    use fenrir_core::runtime::github::GitHubRelease;
+
+    let json = r#"[{
+        "tag_name": "GE-Proton9-20",
+        "name": "GE-Proton9-20",
+        "assets": [
+            {
+                "name": "GE-Proton9-20.tar.gz",
+                "browser_download_url": "https://example.com/GE-Proton9-20.tar.gz",
+                "size": 419430400
+            },
+            {
+                "name": "GE-Proton9-20.sha512sum",
+                "browser_download_url": "https://example.com/GE-Proton9-20.sha512sum",
+                "size": 128
+            }
+        ]
+    }]"#;
+
+    let releases: Vec<GitHubRelease> = serde_json::from_str(json).unwrap();
+    assert_eq!(releases.len(), 1);
+
+    let release = &releases[0];
+    assert_eq!(release.tag_name, "GE-Proton9-20");
+    assert_eq!(release.assets.len(), 2);
+
+    let tarball = release.find_tarball();
+    assert!(tarball.is_some(), "tarball asset must be found");
+    assert!(tarball.unwrap().name.ends_with(".tar.gz"));
+    assert_eq!(tarball.unwrap().size, 419_430_400);
+
+    let checksum = release.find_checksum();
+    assert!(checksum.is_some(), "checksum asset must be found");
+    assert!(checksum.unwrap().name.ends_with(".sha512sum"));
+}
+
+// ---------------------------------------------------------------------------
+// Test 14 (Fase 2): All crack types have a corresponding Wine profile on disk
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_all_crack_types_have_profiles() {
+    let profiles_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/profiles");
+    let profiles = load_profiles_from_dir(&profiles_dir).unwrap();
+
+    let required = [
+        "steam_generic",
+        "onlinefix",
+        "fitgirl",
+        "dodi",
+        "scene",
+        "gog",
+    ];
+    for name in &required {
+        assert!(
+            profiles.contains_key(*name),
+            "missing Wine profile for crack type: {}",
+            name
+        );
+    }
 }

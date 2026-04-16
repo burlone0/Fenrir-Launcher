@@ -1,11 +1,18 @@
 mod commands;
 
 use clap::Parser;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(name = "fenrir", about = "Fenrir Game Launcher", version)]
 struct Cli {
+    /// Enable verbose output (sets log level to debug/trace)
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    /// Suppress all output except errors
+    #[arg(short, long, global = true)]
+    quiet: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -63,8 +70,19 @@ enum Commands {
 
 #[derive(clap::Subcommand)]
 enum RuntimeAction {
-    /// List available runtimes
+    /// List installed runtimes
     List,
+    /// Show available runtimes for download
+    Available {
+        /// Runtime kind: proton-ge or wine-ge
+        #[arg(short, long, default_value = "proton-ge")]
+        kind: String,
+    },
+    /// Download and install a runtime
+    Install {
+        /// Version to install (e.g. GE-Proton9-20)
+        version: String,
+    },
     /// Set default runtime
     SetDefault {
         /// Runtime ID
@@ -73,11 +91,8 @@ enum RuntimeAction {
 }
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let cli = Cli::parse();
+    init_tracing(cli.verbose, cli.quiet);
 
     let result = match cli.command {
         Commands::Scan { path } => commands::scan::run(path),
@@ -90,12 +105,47 @@ fn main() {
         Commands::Launch { ref query } => commands::launch::run(query),
         Commands::Runtime { ref action } => match action {
             RuntimeAction::List => commands::runtime::list(),
+            RuntimeAction::Available { ref kind } => commands::runtime::available(kind),
+            RuntimeAction::Install { ref version } => commands::runtime::install(version),
             RuntimeAction::SetDefault { ref id } => commands::runtime::set_default(id),
         },
     };
 
     if let Err(e) = result {
         eprintln!("error: {}", e);
+        if let Some(hint) = extract_suggestion(e.as_ref()) {
+            eprintln!("hint: {}", hint);
+        }
         std::process::exit(1);
     }
+}
+
+fn init_tracing(verbose: bool, quiet: bool) {
+    let filter = if verbose {
+        tracing_subscriber::EnvFilter::new("debug,fenrir_core=trace,fenrir_cli=trace")
+    } else if quiet {
+        tracing_subscriber::EnvFilter::new("error")
+    } else {
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,fenrir_core=info"))
+    };
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_file(false)
+        .init();
+}
+
+/// Walks the error source chain looking for a `FenrirError` with a suggestion.
+fn extract_suggestion(e: &(dyn std::error::Error + 'static)) -> Option<&'static str> {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(err) = current {
+        if let Some(fenrir_err) = err.downcast_ref::<fenrir_core::FenrirError>() {
+            return fenrir_err.suggestion();
+        }
+        current = err.source();
+    }
+    None
 }

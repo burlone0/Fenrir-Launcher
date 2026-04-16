@@ -1,4 +1,6 @@
 pub mod discovery;
+pub mod downloader;
+pub mod github;
 pub mod types;
 pub mod version;
 

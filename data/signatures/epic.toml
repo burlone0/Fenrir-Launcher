@@ -1,0 +1,27 @@
+# =============================================================================
+# Fenrir -- Epic Games Detection Signatures
+# =============================================================================
+#
+# Patterns for detecting games from the Epic Games Store. Epic games ship
+# EOSSDK-Win64-Shipping.dll for online services. ScreamAPI is the common
+# DLC unlocker for Epic titles.
+# =============================================================================
+
+# Epic Games Store title -- identified by EOSSDK-Win64-Shipping.dll.
+# All EGS games bundle the Epic Online Services SDK. ScreamAPI replaces it
+# as a DLC/entitlement unlocker and ships the same filename.
+[epic_emu]
+name = "Epic Emu"
+store = "Epic"
+required_files = ["EOSSDK-Win64-Shipping.dll"]
+optional_files = ["EOSSDK-Win32-Shipping.dll"]
+confidence_boost = ["ScreamAPI.dll", "ScreamAPI64.dll"]
+
+# Epic Games launcher shortcut -- identifies games installed via EGS launcher
+# by the presence of an EpicGamesLauncher.lnk shortcut in the game directory.
+[epic_generic]
+name = "Epic Generic"
+store = "Epic"
+required_files = ["EpicGamesLauncher.lnk"]
+optional_files = ["EOSSDK-Win64-Shipping.dll"]
+confidence_boost = []
