@@ -20,6 +20,14 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("game not found")?
     };
 
+    if matches!(game.status, GameStatus::Configured | GameStatus::Ready) {
+        println!(
+            "'{}' is already configured. Re-run with --force to override (not yet implemented).",
+            game.title
+        );
+        return Ok(());
+    }
+
     println!("configuring '{}'...", game.title);
 
     // 1. Find runtime
@@ -113,9 +121,5 @@ fn find_profiles_dir() -> Option<PathBuf> {
 fn crack_type_to_profile_name(
     crack_type: Option<fenrir_core::library::game::CrackType>,
 ) -> &'static str {
-    use fenrir_core::library::game::CrackType;
-    match crack_type {
-        Some(CrackType::OnlineFix) => "onlinefix",
-        _ => "steam_generic",
-    }
+    fenrir_core::prefix::crack_type_to_profile_name(crack_type)
 }

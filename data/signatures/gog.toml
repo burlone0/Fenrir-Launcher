@@ -1,0 +1,40 @@
+# =============================================================================
+# Fenrir -- GOG Game Detection Signatures
+# =============================================================================
+#
+# Patterns for detecting GOG games and rips. GOG games ship without DRM by
+# default; these signatures identify the GOG-specific metadata files and
+# directory structures left by the installer or GOG Galaxy client.
+# =============================================================================
+
+# GOG game identified by the per-game metadata .info file.
+# GOG installers write goggame-<appid>.info to the install directory.
+# This is the most reliable GOG indicator across all install methods.
+[gog_info]
+name = "GOG"
+store = "GOG"
+crack_type = "GOGRip"
+required_files = ["goggame-*.info"]
+optional_files = ["goglog/", "gog.ico"]
+confidence_boost = ["gameinfo", "support/"]
+
+# GOG Galaxy client -- identified by GalaxyClient.dll.
+# Present when the game was installed through the GOG Galaxy launcher.
+[gog_galaxy]
+name = "GOG Galaxy"
+store = "GOG"
+crack_type = "GOGRip"
+required_files = ["GalaxyClient.dll"]
+optional_files = ["goggame-*.info"]
+confidence_boost = ["Galaxy64.dll"]
+
+# GOG offline installer residue -- identified by game.id.
+# GOG offline installers write a game.id file to the install root.
+# The support/ directory contains GOG helper scripts.
+[gog_installer]
+name = "GOG Installer"
+store = "GOG"
+crack_type = "GOGRip"
+required_files = ["game.id"]
+optional_files = ["start.sh", "gameinfo"]
+confidence_boost = ["support/gog-*.sh"]

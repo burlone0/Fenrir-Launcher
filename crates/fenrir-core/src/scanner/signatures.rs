@@ -86,6 +86,28 @@ confidence_boost = []
         assert_eq!(sigs.len(), 2);
     }
 
+    #[test]
+    fn test_load_all_signature_files() {
+        // CARGO_MANIFEST_DIR = crates/fenrir-core/ → ../../data/signatures = repo root
+        let sig_dir =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
+        let sigs = load_signatures_from_dir(&sig_dir).unwrap();
+        // steam (6 original + 6 new) + gog (3) + epic (2) = at least 14
+        assert!(
+            sigs.len() >= 14,
+            "expected at least 14 signatures, got {}",
+            sigs.len()
+        );
+        // Every signature must declare at least one required file to be useful
+        for sig in &sigs {
+            assert!(
+                !sig.required_files.is_empty(),
+                "signature '{}' has no required_files",
+                sig.name
+            );
+        }
+    }
+
     // OnlineFix.url is a website shortcut that users routinely delete.
     // The invariant file is OnlineFix.ini (crack config, required for execution).
     #[test]

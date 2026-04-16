@@ -81,6 +81,33 @@ pub enum FenrirError {
 
     #[error("launcher error: {0}")]
     Launcher(#[from] LauncherError),
+
+    #[error("download error: {0}")]
+    Download(#[from] DownloadError),
+}
+
+impl FenrirError {
+    /// Returns a user-facing hint on how to recover from this error.
+    pub fn suggestion(&self) -> Option<&'static str> {
+        match self {
+            Self::Config(ConfigError::NotFound(_)) => {
+                Some("Run 'fenrir config' to generate a default config file.")
+            }
+            Self::Runtime(RuntimeError::NoRuntimeAvailable) => {
+                Some("Install Wine or run 'fenrir runtime install' to download GE-Proton.")
+            }
+            Self::Scanner(ScannerError::DirNotFound(_)) => {
+                Some("Check the path exists and you have read permissions.")
+            }
+            Self::Launcher(LauncherError::ExeNotFound(_)) => {
+                Some("The game executable may have moved. Re-scan or update the path manually.")
+            }
+            Self::Launcher(LauncherError::NotConfigured(_)) => {
+                Some("Run 'fenrir configure <game>' to set up the Wine prefix.")
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -138,6 +165,24 @@ pub enum PrefixError {
 
     #[error("prefix directory error: {0}")]
     Directory(String),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DownloadError {
+    #[error("http error: {0}")]
+    Http(#[from] reqwest::Error),
+
+    #[error("checksum mismatch: expected {expected}, got {actual}")]
+    ChecksumMismatch { expected: String, actual: String },
+
+    #[error("no tarball found in release {0}")]
+    NoTarball(String),
+
+    #[error("extraction failed: {0}")]
+    Extraction(String),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

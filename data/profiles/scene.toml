@@ -1,0 +1,26 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: Scene
+# =============================================================================
+#
+# Applied to Scene releases (CODEX, PLAZA, EMPRESS, and generic .nfo releases).
+# Scene cracks ship a patched steam_api DLL, so both 32-bit and 64-bit
+# variants are set to native.
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
+[profile]
+name = "scene"
+description = "Profile for Scene releases (CODEX, PLAZA, EMPRESS)"
+
+[wine]
+windows_version = "win10"
+dll_overrides = ["steam_api=n", "steam_api64=n"]
+
+[env]
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
