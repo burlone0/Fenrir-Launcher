@@ -20,6 +20,39 @@ pub struct PreparedCommand {
     pub working_dir: PathBuf,
 }
 
+/// Reads the Steam AppID for a game from its install directory.
+/// Checks OnlineFix.ini (FakeAppId) first, then steam_appid.txt.
+/// Returns None if neither is found or readable.
+pub fn read_steam_app_id(install_dir: &std::path::Path) -> Option<String> {
+    // OnlineFix.ini takes priority: FakeAppId is the Spacewar ID used for Steam IPC
+    let onlinefix_ini = install_dir.join("OnlineFix.ini");
+    if onlinefix_ini.exists() {
+        if let Ok(content) = std::fs::read_to_string(&onlinefix_ini) {
+            for line in content.lines() {
+                if let Some(value) = line.trim().strip_prefix("FakeAppId=") {
+                    let v = value.trim().to_string();
+                    if !v.is_empty() {
+                        return Some(v);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: steam_appid.txt
+    let appid_txt = install_dir.join("steam_appid.txt");
+    if appid_txt.exists() {
+        if let Ok(content) = std::fs::read_to_string(&appid_txt) {
+            let v = content.trim().to_string();
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+
+    None
+}
+
 /// Build the launch command without executing it.
 pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
     let mut env = config.env_vars.clone();
@@ -135,5 +168,38 @@ mod tests {
             cmd.working_dir,
             PathBuf::from("/mnt/games/cyberpunk/bin/x64")
         );
+    }
+
+    #[test]
+    fn test_read_steam_app_id_onlinefix() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("OnlineFix.ini"),
+            "[Main]\nRealAppId=3643170\nFakeAppId=480\n",
+        )
+        .unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), Some("480".to_string()));
+    }
+
+    #[test]
+    fn test_read_steam_app_id_txt() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("steam_appid.txt"), "945360\n").unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), Some("945360".to_string()));
+    }
+
+    #[test]
+    fn test_read_steam_app_id_priority() {
+        // OnlineFix.ini must win over steam_appid.txt
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("OnlineFix.ini"), "[Main]\nFakeAppId=480\n").unwrap();
+        std::fs::write(dir.path().join("steam_appid.txt"), "945360\n").unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), Some("480".to_string()));
+    }
+
+    #[test]
+    fn test_read_steam_app_id_none() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), None);
     }
 }
