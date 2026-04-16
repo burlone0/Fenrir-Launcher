@@ -65,17 +65,18 @@ pub fn build_overlay_ld_preload(steam_path: &std::path::Path, existing: &str) ->
     let paths: Vec<String> = candidates
         .iter()
         .filter(|p| p.exists())
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
     if paths.is_empty() {
         return None;
     }
 
-    Some(if existing.is_empty() {
+    let existing_trimmed = existing.trim_end_matches(':');
+    Some(if existing_trimmed.is_empty() {
         paths.join(":")
     } else {
-        format!("{}:{}", existing, paths.join(":"))
+        format!("{}:{}", existing_trimmed, paths.join(":"))
     })
 }
 
@@ -314,6 +315,9 @@ mod tests {
         let val = result.unwrap();
         assert!(val.contains("ubuntu12_64/gameoverlayrenderer.so"));
         assert!(val.contains("ubuntu12_32/gameoverlayrenderer.so"));
+        let idx64 = val.find("ubuntu12_64").unwrap();
+        let idx32 = val.find("ubuntu12_32").unwrap();
+        assert!(idx64 < idx32, "64-bit overlay must precede 32-bit");
     }
 
     #[test]
@@ -351,5 +355,22 @@ mod tests {
         let val = result.unwrap();
         assert!(val.contains("ubuntu12_64/gameoverlayrenderer.so"));
         assert!(!val.contains("ubuntu12_32/gameoverlayrenderer.so"));
+    }
+
+    #[test]
+    fn test_build_overlay_ld_preload_existing_trailing_colon() {
+        let dir = tempfile::tempdir().unwrap();
+        let so64 = dir.path().join("ubuntu12_64");
+        std::fs::create_dir_all(&so64).unwrap();
+        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
+
+        let result = build_overlay_ld_preload(dir.path(), "/usr/lib/libfoo.so:");
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert!(
+            !val.contains("::"),
+            "must not produce double colon in LD_PRELOAD"
+        );
+        assert!(val.starts_with("/usr/lib/libfoo.so:"));
     }
 }
