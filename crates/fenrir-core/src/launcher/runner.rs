@@ -54,6 +54,31 @@ pub fn read_steam_app_id(install_dir: &std::path::Path) -> Option<String> {
     None
 }
 
+/// Builds the LD_PRELOAD value for Steam overlay injection.
+/// Looks for gameoverlayrenderer.so in ubuntu12_64/ and ubuntu12_32/ under steam_path.
+/// Appends to existing LD_PRELOAD value (colon-separated). Returns None if no .so found.
+pub fn build_overlay_ld_preload(steam_path: &std::path::Path, existing: &str) -> Option<String> {
+    let candidates = [
+        steam_path.join("ubuntu12_64/gameoverlayrenderer.so"),
+        steam_path.join("ubuntu12_32/gameoverlayrenderer.so"),
+    ];
+    let paths: Vec<String> = candidates
+        .iter()
+        .filter(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
+    if paths.is_empty() {
+        return None;
+    }
+
+    Some(if existing.is_empty() {
+        paths.join(":")
+    } else {
+        format!("{}:{}", existing, paths.join(":"))
+    })
+}
+
 /// Build the launch command without executing it.
 pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
     let mut env = config.env_vars.clone();
@@ -272,5 +297,59 @@ mod tests {
         });
         assert!(!cmd.env.contains_key("SteamGameId"));
         assert!(!cmd.env.contains_key("SteamAppId"));
+    }
+
+    #[test]
+    fn test_build_overlay_ld_preload_both_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let so64 = dir.path().join("ubuntu12_64");
+        let so32 = dir.path().join("ubuntu12_32");
+        std::fs::create_dir_all(&so64).unwrap();
+        std::fs::create_dir_all(&so32).unwrap();
+        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
+        std::fs::write(so32.join("gameoverlayrenderer.so"), "").unwrap();
+
+        let result = build_overlay_ld_preload(dir.path(), "");
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert!(val.contains("ubuntu12_64/gameoverlayrenderer.so"));
+        assert!(val.contains("ubuntu12_32/gameoverlayrenderer.so"));
+    }
+
+    #[test]
+    fn test_build_overlay_ld_preload_appends_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let so64 = dir.path().join("ubuntu12_64");
+        std::fs::create_dir_all(&so64).unwrap();
+        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
+
+        let result = build_overlay_ld_preload(dir.path(), "/usr/lib/libfoo.so");
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert!(val.starts_with("/usr/lib/libfoo.so:"));
+        assert!(val.contains("ubuntu12_64/gameoverlayrenderer.so"));
+    }
+
+    #[test]
+    fn test_build_overlay_ld_preload_no_so() {
+        let dir = tempfile::tempdir().unwrap();
+        // no .so files created
+        let result = build_overlay_ld_preload(dir.path(), "");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_build_overlay_ld_preload_only_one_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let so64 = dir.path().join("ubuntu12_64");
+        std::fs::create_dir_all(&so64).unwrap();
+        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
+        // ubuntu12_32 not created
+
+        let result = build_overlay_ld_preload(dir.path(), "");
+        assert!(result.is_some());
+        let val = result.unwrap();
+        assert!(val.contains("ubuntu12_64/gameoverlayrenderer.so"));
+        assert!(!val.contains("ubuntu12_32/gameoverlayrenderer.so"));
     }
 }
