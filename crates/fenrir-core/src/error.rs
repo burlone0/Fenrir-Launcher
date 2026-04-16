@@ -81,6 +81,9 @@ pub enum FenrirError {
 
     #[error("launcher error: {0}")]
     Launcher(#[from] LauncherError),
+
+    #[error("download error: {0}")]
+    Download(#[from] DownloadError),
 }
 
 impl FenrirError {
@@ -162,6 +165,24 @@ pub enum PrefixError {
 
     #[error("prefix directory error: {0}")]
     Directory(String),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DownloadError {
+    #[error("http error: {0}")]
+    Http(#[from] reqwest::Error),
+
+    #[error("checksum mismatch: expected {expected}, got {actual}")]
+    ChecksumMismatch { expected: String, actual: String },
+
+    #[error("no tarball found in release {0}")]
+    NoTarball(String),
+
+    #[error("extraction failed: {0}")]
+    Extraction(String),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
