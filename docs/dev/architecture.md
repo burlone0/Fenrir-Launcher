@@ -79,14 +79,30 @@ launch. `find_by_title()` does case-insensitive substring matching.
 
 ### runtime
 
-**Purpose:** Discover installed Wine and Proton runtimes.
+**Purpose:** Discover installed runtimes and download new ones from GitHub.
+
+The runtime module has four files:
+
+- `types.rs` -- data structures (`Runtime`, `RuntimeType`, `RuntimeSource`)
+- `discovery.rs` -- filesystem scan (`discover_all()`)
+- `github.rs` -- GitHub Releases API client
+- `downloader.rs` -- archive download, checksum verification, extraction
 
 **Key types:**
 - `Runtime` -- a discovered runtime (ID, type, version, path, source)
 - `RuntimeType` -- enum: Wine, Proton, ProtonGE, WineGE
 - `RuntimeSource` -- enum: System, Steam, Downloaded
+- `GitHubRelease` -- a release entry from the GloriousEggroll API
+  (`tag_name`, list of `GitHubAsset`)
+- `GitHubAsset` -- a single release file (`name`, `browser_download_url`,
+  `size`)
+- `ProgressCallback` -- `Arc<dyn Fn(u64, u64) + Send + Sync>` -- called
+  periodically during download with `(bytes_received, total_bytes)`;
+  used to drive the CLI progress bar
 
-**How it works:** `discover_all()` scans a prioritized list of filesystem paths:
+**How it works:**
+
+Discovery (`discovery.rs`) scans a prioritized list of filesystem paths:
 1. `~/.local/share/fenrir/runtimes/` (Fenrir-managed)
 2. `~/.steam/root/compatibilitytools.d/` (GE-Proton)
 3. Steam's common/ directory (Valve Proton)
@@ -94,6 +110,18 @@ launch. `find_by_title()` does case-insensitive substring matching.
 
 Each discovered runtime gets a version parsed from directory name or binary
 output.
+
+GitHub client (`github.rs`) calls the GloriousEggroll releases API to list
+available versions. The repo constants (`PROTON_GE_REPO`, `WINE_GE_REPO`) are
+the only hard-coded references to an external service in the entire codebase.
+
+Downloader (`downloader.rs`) handles the full install sequence:
+1. Fetch the asset URL from `GitHubRelease`
+2. Stream the download, calling the progress callback every chunk
+3. Verify the SHA-512 checksum against the `.sha512sum` companion file
+4. Extract the tarball to `~/.local/share/fenrir/runtimes/`
+
+If the checksum fails, the partial download is deleted and an error is returned.
 
 **Depends on:** nothing (leaf module)
 

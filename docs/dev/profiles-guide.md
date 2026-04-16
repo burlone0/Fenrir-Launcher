@@ -93,6 +93,10 @@ Fenrir maps crack types to profile names with a simple lookup:
 | CrackType | Profile name |
 |-----------|-------------|
 | `OnlineFix` | `onlinefix` |
+| `DODI` | `dodi` |
+| `FitGirl` | `fitgirl` |
+| `Scene` | `scene` |
+| `GOGRip` | `gog` |
 | Everything else | `steam_generic` |
 
 The profile `name` field must match the expected profile name. If no matching
@@ -134,7 +138,7 @@ fsync = true
 
 ### Step 3: Wire it up
 
-Currently, the profile-to-crack-type mapping is in
+The profile-to-crack-type mapping lives in
 `crates/fenrir-cli/src/commands/configure.rs` in the
 `crack_type_to_profile_name()` function. Add your mapping there:
 
@@ -145,8 +149,12 @@ fn crack_type_to_profile_name(
     use fenrir_core::library::game::CrackType;
     match crack_type {
         Some(CrackType::OnlineFix) => "onlinefix",
+        Some(CrackType::DODI)     => "dodi",
+        Some(CrackType::FitGirl)  => "fitgirl",
+        Some(CrackType::Scene)    => "scene",
+        Some(CrackType::GOGRip)   => "gog",
         Some(CrackType::YourType) => "your_profile_name",  // add this
-        _ => "steam_generic",
+        _                         => "steam_generic",
     }
 }
 ```
@@ -186,6 +194,34 @@ For OnlineFix cracks that enable LAN/online multiplayer via Steam emulation.
 - `OPENSSL_ia32cap`: disables an AVX CPU instruction that causes crashes in
   some OnlineFix configurations
 - Everything else: same as steam_generic
+
+### dodi
+
+For DODI repacks. After installation the game directory is a standard Steam
+crack, so the profile mirrors steam_generic exactly: `steam_api=n` and
+`steam_api64=n`, DXVK on, esync/fsync on. DODI-specific files (`_Redist/`,
+`DODI Repacks/`) are not present at runtime so they don't affect Wine setup.
+
+### fitgirl
+
+For FitGirl repacks. Same situation as DODI -- post-install the game is a
+standard Steam crack. The FitGirl-specific marker file (`fitgirl-repacks.site`)
+and setup executables are installer artifacts, not runtime artifacts. Profile
+is steam_generic-equivalent.
+
+### scene
+
+For Scene releases (CODEX, PLAZA, EMPRESS, generic `.nfo` releases). Scene
+cracks ship a patched `steam_api.dll`, so `steam_api=n` and `steam_api64=n`
+are both set. No store is assigned since scene releases aren't tied to a
+storefront.
+
+### gog
+
+For GOG games and rips. GOG ships DRM-free so there's no Steam API to deal with
+-- `dll_overrides` is empty. Galaxy DRM (`GalaxyClient.dll`) is handled
+transparently by Wine's translation layer. Everything else (DXVK, esync/fsync)
+is the same as any other profile.
 
 ## User Overrides
 

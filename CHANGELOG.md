@@ -8,6 +8,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.2.0] - 2026-04-16
+
+Fase 2 complete. Runtime download manager, expanded detection, robust error
+handling, structured logging.
+
+### Added
+
+- **Runtime download** -- fetch GE-Proton and Wine-GE releases directly from
+  GitHub. Includes SHA-512 checksum verification and a progress bar.
+- **`fenrir runtime available`** -- list available runtimes for download
+  (`--kind proton-ge` or `wine-ge`).
+- **`fenrir runtime install <VERSION>`** -- download and install a runtime to
+  `~/.local/share/fenrir/runtimes/`.
+- **`fenrir confirm <GAME>`** -- confirm and add a low-confidence detected game
+  to the library.
+- **Global flags** -- `--verbose` (`-v`) enables debug logging, `--quiet` (`-q`)
+  suppresses everything except errors. Available on all commands.
+- **GOG detection** -- three new signatures: `goggame-*.info`, `GalaxyClient.dll`,
+  `game.id`. GOG profile with no Steam DLL overrides.
+- **Epic detection** -- two new signatures: `EOSSDK-Win64-Shipping.dll` (ScreamAPI
+  support), `EpicGamesLauncher.lnk`.
+- **New tuning profiles** -- dedicated Wine profiles for FitGirl, DODI, Scene,
+  and GOG game types.
+- **Steam overlay injection** -- Fenrir injects the Steam overlay when launching
+  through Proton.
+- **Proton warning suppression** -- noisy Proton stderr output filtered at launch.
+- **Error hints** -- actionable suggestions shown after errors (e.g. "no runtime
+  found -- run `fenrir runtime install`").
+
+### Changed
+
+- Structured logging replaces raw `println!` in the CLI. Log level controlled
+  by `RUST_LOG` or `--verbose`/`--quiet` flags.
+
 ## [0.1.0] - 2026-04-13
 
 First release -- Fase 1 complete. Core library and CLI prototype, covering game
