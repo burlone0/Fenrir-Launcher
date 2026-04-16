@@ -124,4 +124,68 @@ mod tests {
         let release: GitHubRelease = serde_json::from_str(json).unwrap();
         assert!(release.find_tarball().is_none());
     }
+
+    #[test]
+    fn test_find_tarball_xz() {
+        let json = r#"{
+            "tag_name": "Wine-GE-Proton8-26",
+            "name": "Wine-GE-Proton8-26",
+            "assets": [{"name": "wine-ge-8-26-x86_64.tar.xz", "browser_download_url": "https://x.com/t", "size": 200}]
+        }"#;
+        let release: GitHubRelease = serde_json::from_str(json).unwrap();
+        let tarball = release.find_tarball();
+        assert!(tarball.is_some());
+        assert!(tarball.unwrap().name.ends_with(".tar.xz"));
+    }
+
+    #[test]
+    fn test_find_checksum_sha256() {
+        let json = r#"{
+            "tag_name": "test",
+            "name": "test",
+            "assets": [{"name": "file.sha256sum", "browser_download_url": "https://x.com/c", "size": 64}]
+        }"#;
+        let release: GitHubRelease = serde_json::from_str(json).unwrap();
+        let checksum = release.find_checksum();
+        assert!(checksum.is_some());
+        assert!(checksum.unwrap().name.ends_with(".sha256sum"));
+    }
+
+    #[test]
+    fn test_release_without_checksum() {
+        let json = r#"{
+            "tag_name": "test",
+            "name": "test",
+            "assets": [{"name": "file.tar.gz", "browser_download_url": "https://x.com/t", "size": 100}]
+        }"#;
+        let release: GitHubRelease = serde_json::from_str(json).unwrap();
+        assert!(release.find_checksum().is_none());
+    }
+
+    #[test]
+    fn test_release_empty_assets() {
+        let json = r#"{"tag_name": "v1", "name": "v1", "assets": []}"#;
+        let release: GitHubRelease = serde_json::from_str(json).unwrap();
+        assert!(release.find_tarball().is_none());
+        assert!(release.find_checksum().is_none());
+    }
+
+    #[test]
+    fn test_github_asset_fields() {
+        let release: GitHubRelease = serde_json::from_str(MOCK_RELEASE).unwrap();
+        let asset = release.find_tarball().unwrap();
+        assert_eq!(asset.size, 419430400);
+        assert_eq!(
+            asset.browser_download_url,
+            "https://example.com/GE-Proton9-20.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_releases() {
+        let json = format!("[{}, {}]", MOCK_RELEASE, MOCK_RELEASE);
+        let releases: Vec<GitHubRelease> = serde_json::from_str(&json).unwrap();
+        assert_eq!(releases.len(), 2);
+        assert_eq!(releases[0].tag_name, "GE-Proton9-20");
+    }
 }

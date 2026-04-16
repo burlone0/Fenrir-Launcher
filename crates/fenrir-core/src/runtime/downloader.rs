@@ -201,4 +201,33 @@ mod tests {
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, compute_sha512(b"world"));
     }
+
+    #[test]
+    fn test_parse_checksum_empty_content() {
+        assert!(parse_checksum_file("", "any.tar.gz").is_none());
+    }
+
+    #[test]
+    fn test_parse_checksum_malformed_line() {
+        // Line with only one token — must not match
+        let content = "onlyone\n";
+        assert!(parse_checksum_file(content, "onlyone").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_no_tarball_returns_error() {
+        let client = reqwest::Client::new();
+        let release = crate::runtime::github::GitHubRelease {
+            tag_name: "test-release".to_string(),
+            name: "test-release".to_string(),
+            assets: vec![],
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let result = download_runtime(&client, &release, dir.path(), None).await;
+        assert!(
+            matches!(result, Err(DownloadError::NoTarball(_))),
+            "expected NoTarball error, got: {:?}",
+            result
+        );
+    }
 }
