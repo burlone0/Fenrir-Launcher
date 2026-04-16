@@ -6,7 +6,7 @@ slow launchers.
 
 [![CI](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-green.svg)
+![Version: 0.2.0](https://img.shields.io/badge/version-0.2.0-green.svg)
 
 ## What It Does
 
@@ -22,6 +22,8 @@ slow launchers.
 - **Stays offline** -- zero network connections by default, no telemetry, no
   phoning home
 - **Runs fast** -- native Rust binary, instant startup, low memory footprint
+- **Downloads runtimes automatically** -- fetch GE-Proton or Wine-GE directly from GitHub, with SHA-512 checksum verification and progress tracking
+- **Detects GOG and Epic games** -- in addition to Steam cracks, repacks, and scene releases
 
 ## Quick Start
 
@@ -71,12 +73,13 @@ Fenrir is under active development. Here's where things stand:
 
 - **Fase 1 -- Core + CLI** -- done. Scanning, detection, configuration, and
   launch all work from the terminal.
-- **Fase 2 -- Runtime management** -- in progress. Automatic download of
-  GE-Proton and Wine-GE, expanded detection signatures, advanced tuning.
-- **Fase 3 -- GUI** -- planned. Tauri-based visual launcher with game library,
+- **Fase 2 -- Runtime management** -- done. Automatic download of GE-Proton
+  and Wine-GE, expanded detection (GOG, Epic, all major crack types), robust
+  error handling with hints, structured logging.
+- **Fase 3 -- GUI** -- next. Tauri-based visual launcher with game library,
   cover art, and configuration UI.
-- **Fase 4 -- Multi-store** -- planned. GOG, Epic, import from Lutris/Heroic,
-  metadata fetching.
+- **Fase 4 -- Multi-store** -- planned. Import from Lutris/Heroic,
+  metadata fetching, community signatures.
 
 ## Documentation
 
