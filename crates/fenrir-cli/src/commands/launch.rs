@@ -66,6 +66,7 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         },
+        steam_app_id: None,
     };
 
     println!("launching '{}'...", game.title);
