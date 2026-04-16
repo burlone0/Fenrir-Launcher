@@ -95,6 +95,18 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
         env.insert("SteamAppId".to_string(), app_id.clone());
     }
 
+    // Steam overlay injection: LD_PRELOAD with gameoverlayrenderer.so
+    if config.steam_app_id.is_some() {
+        if let Some(steam_path) = crate::runtime::discovery::find_steam_install_dir() {
+            let existing = env.get("LD_PRELOAD").cloned().unwrap_or_default();
+            if let Some(ld_preload) = build_overlay_ld_preload(&steam_path, &existing) {
+                env.insert("LD_PRELOAD".to_string(), ld_preload);
+            }
+        } else {
+            tracing::warn!("Steam installation not found, Steam overlay will not be available");
+        }
+    }
+
     if config.is_proton {
         let steam_path = crate::runtime::discovery::find_steam_install_dir().unwrap_or_else(|| {
             tracing::warn!(
@@ -372,5 +384,36 @@ mod tests {
             "must not produce double colon in LD_PRELOAD"
         );
         assert!(val.starts_with("/usr/lib/libfoo.so:"));
+    }
+
+    #[test]
+    fn test_build_command_steam_overlay_ld_preload() {
+        // Build a fake Steam install dir with both .so files
+        let steam_dir = tempfile::tempdir().unwrap();
+        let so64 = steam_dir.path().join("ubuntu12_64");
+        let so32 = steam_dir.path().join("ubuntu12_32");
+        std::fs::create_dir_all(&so64).unwrap();
+        std::fs::create_dir_all(&so32).unwrap();
+        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
+        std::fs::write(so32.join("gameoverlayrenderer.so"), "").unwrap();
+
+        // Verify the helper produces correct output with a fake Steam dir
+        let result = build_overlay_ld_preload(steam_dir.path(), "");
+        assert!(result.is_some());
+        let ld = result.unwrap();
+        assert!(ld.contains("ubuntu12_64/gameoverlayrenderer.so"));
+        assert!(ld.contains("ubuntu12_32/gameoverlayrenderer.so"));
+
+        // When steam_app_id is None, build_launch_command must NOT set LD_PRELOAD
+        let cmd = build_launch_command(&LaunchConfig {
+            executable: PathBuf::from("/games/test/game.exe"),
+            wine_binary: PathBuf::from("/usr/bin/wine"),
+            prefix_path: PathBuf::from("/tmp/prefix"),
+            env_vars: HashMap::new(),
+            is_proton: false,
+            proton_path: None,
+            steam_app_id: None,
+        });
+        assert!(!cmd.env.contains_key("LD_PRELOAD"));
     }
 }
