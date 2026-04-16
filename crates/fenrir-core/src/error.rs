@@ -60,6 +60,53 @@ mod tests {
         let e = LauncherError::LaunchFailed("no such file".to_string());
         assert!(e.to_string().contains("launch failed"));
     }
+
+    #[test]
+    fn test_download_error_display() {
+        let e = DownloadError::NoTarball("GE-Proton9-20".to_string());
+        assert!(e.to_string().contains("no tarball found"));
+
+        let e = DownloadError::ChecksumMismatch {
+            expected: "abc".to_string(),
+            actual: "def".to_string(),
+        };
+        assert!(e.to_string().contains("checksum mismatch"));
+        assert!(e.to_string().contains("abc"));
+        assert!(e.to_string().contains("def"));
+
+        let e = DownloadError::Extraction("bad archive".to_string());
+        assert!(e.to_string().contains("extraction failed"));
+    }
+
+    #[test]
+    fn test_fenrir_error_suggestion_some() {
+        let e = FenrirError::Config(ConfigError::NotFound(PathBuf::from("/x")));
+        assert!(e.suggestion().is_some());
+
+        let e = FenrirError::Runtime(RuntimeError::NoRuntimeAvailable);
+        assert!(e.suggestion().is_some());
+
+        let e = FenrirError::Scanner(ScannerError::DirNotFound(PathBuf::from("/x")));
+        assert!(e.suggestion().is_some());
+
+        let e = FenrirError::Launcher(LauncherError::ExeNotFound(PathBuf::from("/x")));
+        assert!(e.suggestion().is_some());
+
+        let e = FenrirError::Launcher(LauncherError::NotConfigured(uuid::Uuid::nil()));
+        assert!(e.suggestion().is_some());
+    }
+
+    #[test]
+    fn test_fenrir_error_suggestion_none() {
+        let e = FenrirError::Database(DatabaseError::Migration("x".to_string()));
+        assert!(e.suggestion().is_none());
+
+        let e = FenrirError::Prefix(PrefixError::WinebootFailed("x".to_string()));
+        assert!(e.suggestion().is_none());
+
+        let e = FenrirError::Download(DownloadError::Extraction("x".to_string()));
+        assert!(e.suggestion().is_none());
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
