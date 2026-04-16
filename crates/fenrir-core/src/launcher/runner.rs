@@ -104,7 +104,7 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
             if let Some(ld_preload) = build_overlay_ld_preload(steam_path, &existing) {
                 env.insert("LD_PRELOAD".to_string(), ld_preload);
             }
-        } else {
+        } else if !config.is_proton {
             tracing::warn!("Steam installation not found, Steam overlay will not be available");
         }
     }
