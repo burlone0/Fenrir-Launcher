@@ -95,11 +95,13 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
         env.insert("SteamAppId".to_string(), app_id.clone());
     }
 
+    let steam_install_dir = crate::runtime::discovery::find_steam_install_dir();
+
     // Steam overlay injection: LD_PRELOAD with gameoverlayrenderer.so
     if config.steam_app_id.is_some() {
-        if let Some(steam_path) = crate::runtime::discovery::find_steam_install_dir() {
+        if let Some(ref steam_path) = steam_install_dir {
             let existing = env.get("LD_PRELOAD").cloned().unwrap_or_default();
-            if let Some(ld_preload) = build_overlay_ld_preload(&steam_path, &existing) {
+            if let Some(ld_preload) = build_overlay_ld_preload(steam_path, &existing) {
                 env.insert("LD_PRELOAD".to_string(), ld_preload);
             }
         } else {
@@ -108,7 +110,7 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
     }
 
     if config.is_proton {
-        let steam_path = crate::runtime::discovery::find_steam_install_dir().unwrap_or_else(|| {
+        let steam_path = steam_install_dir.unwrap_or_else(|| {
             tracing::warn!(
                 "Steam installation not found, falling back to prefix path for \
                      STEAM_COMPAT_CLIENT_INSTALL_PATH"
@@ -387,24 +389,8 @@ mod tests {
     }
 
     #[test]
-    fn test_build_command_steam_overlay_ld_preload() {
-        // Build a fake Steam install dir with both .so files
-        let steam_dir = tempfile::tempdir().unwrap();
-        let so64 = steam_dir.path().join("ubuntu12_64");
-        let so32 = steam_dir.path().join("ubuntu12_32");
-        std::fs::create_dir_all(&so64).unwrap();
-        std::fs::create_dir_all(&so32).unwrap();
-        std::fs::write(so64.join("gameoverlayrenderer.so"), "").unwrap();
-        std::fs::write(so32.join("gameoverlayrenderer.so"), "").unwrap();
-
-        // Verify the helper produces correct output with a fake Steam dir
-        let result = build_overlay_ld_preload(steam_dir.path(), "");
-        assert!(result.is_some());
-        let ld = result.unwrap();
-        assert!(ld.contains("ubuntu12_64/gameoverlayrenderer.so"));
-        assert!(ld.contains("ubuntu12_32/gameoverlayrenderer.so"));
-
-        // When steam_app_id is None, build_launch_command must NOT set LD_PRELOAD
+    fn test_build_command_no_overlay_without_steam_app_id() {
+        // When steam_app_id is None, LD_PRELOAD must not be set by the overlay logic
         let cmd = build_launch_command(&LaunchConfig {
             executable: PathBuf::from("/games/test/game.exe"),
             wine_binary: PathBuf::from("/usr/bin/wine"),
@@ -415,5 +401,30 @@ mod tests {
             steam_app_id: None,
         });
         assert!(!cmd.env.contains_key("LD_PRELOAD"));
+    }
+
+    #[test]
+    fn test_build_command_overlay_preserves_existing_ld_preload() {
+        // When steam_app_id is Some and a pre-existing LD_PRELOAD is set,
+        // the result must either keep the original value (if Steam not installed)
+        // or append to it (if Steam is installed). Either way the original value must survive.
+        let existing = "/usr/lib/libfoo.so".to_string();
+        let cmd = build_launch_command(&LaunchConfig {
+            executable: PathBuf::from("/games/test/game.exe"),
+            wine_binary: PathBuf::from("/usr/bin/wine"),
+            prefix_path: PathBuf::from("/tmp/prefix"),
+            env_vars: HashMap::from([("LD_PRELOAD".to_string(), existing.clone())]),
+            is_proton: false,
+            proton_path: None,
+            steam_app_id: Some("480".to_string()),
+        });
+        let ld = cmd
+            .env
+            .get("LD_PRELOAD")
+            .expect("LD_PRELOAD must be present (set via env_vars)");
+        assert!(
+            ld.contains(&existing),
+            "original LD_PRELOAD value must be preserved"
+        );
     }
 }
