@@ -104,6 +104,17 @@ fn find_steam_common_dir() -> Option<PathBuf> {
     candidates.into_iter().flatten().find(|p| p.exists())
 }
 
+/// Returns the Steam installation root directory, if found.
+/// Used to set STEAM_COMPAT_CLIENT_INSTALL_PATH correctly for Proton.
+pub fn find_steam_install_dir() -> Option<PathBuf> {
+    let candidates = [
+        dirs::home_dir().map(|h| h.join(".steam/root")),
+        dirs::data_dir().map(|d| d.join("Steam")),
+        dirs::home_dir().map(|h| h.join(".steam/steam")),
+    ];
+    candidates.into_iter().flatten().find(|p| p.exists())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,5 +201,17 @@ mod tests {
             "discover_all must find at least system Wine when /usr/bin/wine exists"
         );
         assert!(runtimes.iter().any(|r| r.id == "system-wine"));
+    }
+
+    #[test]
+    fn test_find_steam_install_dir_returns_existing_path_or_none() {
+        // Cannot assert a specific value without knowing the test environment,
+        // but the function must not panic and must return only existing paths.
+        if let Some(path) = find_steam_install_dir() {
+            assert!(
+                path.exists(),
+                "find_steam_install_dir returned a non-existent path"
+            );
+        }
     }
 }
