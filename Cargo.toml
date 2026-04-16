@@ -39,3 +39,18 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 regex-lite = "0.1"
+
+# HTTP + download
+reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
+futures-util = "0.3"
+
+# Checksum
+sha2 = "0.10"
+hex = "0.4"
+
+# Archive extraction
+flate2 = "1"
+tar = "0.4"
+
+# CLI progress
+indicatif = "0.17"
