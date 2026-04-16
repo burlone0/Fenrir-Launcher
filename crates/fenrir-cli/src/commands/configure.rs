@@ -121,13 +121,5 @@ fn find_profiles_dir() -> Option<PathBuf> {
 fn crack_type_to_profile_name(
     crack_type: Option<fenrir_core::library::game::CrackType>,
 ) -> &'static str {
-    use fenrir_core::library::game::CrackType;
-    match crack_type {
-        Some(CrackType::OnlineFix) => "onlinefix",
-        Some(CrackType::DODI) => "dodi",
-        Some(CrackType::FitGirl) => "fitgirl",
-        Some(CrackType::Scene) => "scene",
-        Some(CrackType::GOGRip) => "gog",
-        _ => "steam_generic",
-    }
+    fenrir_core::prefix::crack_type_to_profile_name(crack_type)
 }

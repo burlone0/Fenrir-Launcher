@@ -238,6 +238,7 @@ fn test_launch_command_wine_vs_proton() {
         env_vars: HashMap::new(),
         is_proton: false,
         proton_path: None,
+        steam_app_id: None,
     });
 
     assert_eq!(wine_cmd.program, "/usr/bin/wine");
@@ -256,6 +257,7 @@ fn test_launch_command_wine_vs_proton() {
         env_vars: HashMap::new(),
         is_proton: true,
         proton_path: Some(PathBuf::from("/runtimes/GE-Proton9-20")),
+        steam_app_id: None,
     });
 
     assert_eq!(proton_cmd.program, "/runtimes/GE-Proton9-20/proton");
