@@ -70,8 +70,19 @@ enum Commands {
 
 #[derive(clap::Subcommand)]
 enum RuntimeAction {
-    /// List available runtimes
+    /// List installed runtimes
     List,
+    /// Show available runtimes for download
+    Available {
+        /// Runtime kind: proton-ge or wine-ge
+        #[arg(short, long, default_value = "proton-ge")]
+        kind: String,
+    },
+    /// Download and install a runtime
+    Install {
+        /// Version to install (e.g. GE-Proton9-20)
+        version: String,
+    },
     /// Set default runtime
     SetDefault {
         /// Runtime ID
@@ -94,6 +105,8 @@ fn main() {
         Commands::Launch { ref query } => commands::launch::run(query),
         Commands::Runtime { ref action } => match action {
             RuntimeAction::List => commands::runtime::list(),
+            RuntimeAction::Available { ref kind } => commands::runtime::available(kind),
+            RuntimeAction::Install { ref version } => commands::runtime::install(version),
             RuntimeAction::SetDefault { ref id } => commands::runtime::set_default(id),
         },
     };
