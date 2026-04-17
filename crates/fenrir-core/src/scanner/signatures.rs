@@ -13,6 +13,8 @@ pub struct Signature {
     pub optional_files: Vec<String>,
     #[serde(default)]
     pub confidence_boost: Vec<String>,
+    #[serde(default)]
+    pub auto_add_threshold: Option<u32>,
 }
 
 pub fn parse_signatures_from_str(content: &str) -> Result<Vec<Signature>, ScannerError> {
@@ -137,5 +139,35 @@ confidence_boost = ["steam_settings/"]
             sig.optional_files.contains(&"OnlineFix64.dll".to_string()),
             "OnlineFix64.dll should be optional"
         );
+    }
+
+    #[test]
+    fn test_auto_add_threshold_parsed_from_toml() {
+        let toml = r#"
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+auto_add_threshold = 30
+required_files = ["OnlineFix.ini"]
+optional_files = []
+confidence_boost = []
+"#;
+        let sigs = parse_signatures_from_str(toml).unwrap();
+        let sig = sigs.iter().find(|s| s.name == "OnlineFix").unwrap();
+        assert_eq!(sig.auto_add_threshold, Some(30));
+    }
+
+    #[test]
+    fn test_auto_add_threshold_defaults_to_none() {
+        let toml = r#"
+[generic]
+name = "Generic"
+store = "Steam"
+required_files = ["steam_api.dll"]
+"#;
+        let sigs = parse_signatures_from_str(toml).unwrap();
+        let sig = sigs.iter().find(|s| s.name == "Generic").unwrap();
+        assert_eq!(sig.auto_add_threshold, None);
     }
 }

@@ -632,6 +632,89 @@ fn test_github_release_parsing() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 15 (Sprint 1): Exe in subfolder is promoted to the correct game root
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_scanner_nested_exe_finds_correct_root() {
+    let games_dir = tempdir().unwrap();
+    let game_root = games_dir.path().join("Elden Ring");
+    let game_subdir = game_root.join("Game");
+    fs::create_dir_all(&game_subdir).unwrap();
+    fs::write(game_root.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_root.join("steam_appid.txt"), "1245620").unwrap();
+    fs::write(game_subdir.join("eldenring.exe"), "fake").unwrap();
+
+    let sig_toml = r#"
+[steam_generic_64]
+name = "Steam Generic Crack (64-bit)"
+store = "Steam"
+required_files = ["steam_api64.dll"]
+optional_files = ["steam_appid.txt"]
+confidence_boost = []
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 6).unwrap();
+
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+    assert_eq!(all.len(), 1, "should find exactly one game");
+    assert_eq!(
+        all[0].path, game_root,
+        "root should be 'Elden Ring/', not 'Game/'"
+    );
+    assert!(all[0].confidence >= 30);
+}
+
+// ---------------------------------------------------------------------------
+// Test 16 (Sprint 1): System dirs inside a game folder produce no extra candidates
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_scanner_no_false_positives_from_system_dirs() {
+    let games_dir = tempdir().unwrap();
+    let game_root = games_dir.path().join("Some Game");
+    fs::create_dir_all(&game_root).unwrap();
+    fs::write(game_root.join("steam_api.dll"), "fake").unwrap();
+    fs::write(game_root.join("game.exe"), "fake").unwrap();
+
+    let common_redist = game_root.join("_CommonRedist").join("vcredist");
+    fs::create_dir_all(&common_redist).unwrap();
+    fs::write(common_redist.join("vcredist_x64.exe"), "fake").unwrap();
+
+    let dx = game_root.join("DirectX");
+    fs::create_dir_all(&dx).unwrap();
+    fs::write(dx.join("dxsetup.exe"), "fake").unwrap();
+
+    let sig_toml = r#"
+[steam_generic]
+name = "Steam Generic"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = []
+confidence_boost = []
+"#;
+    let sigs = signatures::parse_signatures_from_str(sig_toml).unwrap();
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 6).unwrap();
+
+    // Only one candidate total — the game itself, not any system subdir
+    assert_eq!(
+        result.total_candidates, 1,
+        "should not create candidates for system dirs"
+    );
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].path, game_root);
+}
+
+// ---------------------------------------------------------------------------
 // Test 14 (Fase 2): All crack types have a corresponding Wine profile on disk
 // ---------------------------------------------------------------------------
 

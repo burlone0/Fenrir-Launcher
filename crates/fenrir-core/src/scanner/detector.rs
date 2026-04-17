@@ -10,6 +10,7 @@ const IGNORED_DIRS: &[&str] = &[
     "DotNetFX",
     "__MACOSX",
     "_CommonRedist",
+    "CommonRedist",
     "Redist",
     "vcredist",
     "directx",
@@ -21,6 +22,11 @@ const IGNORED_DIRS: &[&str] = &[
     "common-redist",
     "__Installer",
     "$PLUGINSDIR",
+    "DXSETUP",
+    "Support",
+    "Extras",
+    "NativeMods",
+    "PatchFiles",
 ];
 
 /// Max parent levels to walk up from an exe looking for a signature marker.
@@ -35,12 +41,15 @@ const ROOT_MARKERS: &[&str] = &[
     "steam_appid.txt",
     "steam_emu.ini",
     "OnlineFix.ini",
+    "OnlineFix.url",
     "OnlineFix64.dll",
     "cream_api.ini",
     "EOSSDK-Win64-Shipping.dll",
     "EOSSDK-Win32-Shipping.dll",
     "GalaxyClient.dll",
+    "galaxy.dll",
     "game.id",
+    "STEAMRIP \u{00BB} Free Pre-installed Steam Games.url",
 ];
 
 /// Glob markers (substring-based, simple prefix+suffix match). Kept minimal
@@ -328,8 +337,6 @@ mod tests {
 
     #[test]
     fn test_dedup_parent_and_nested_exe() {
-        // Game with exe both at root and in a subfolder (helper tools):
-        // the root should absorb the nested exe, not produce two candidates.
         let dir = tempfile::tempdir().unwrap();
         let game_dir = dir.path().join("Game");
         fs::create_dir(&game_dir).unwrap();
@@ -351,7 +358,6 @@ mod tests {
 
     #[test]
     fn test_installer_only_candidate_is_filtered() {
-        // A folder whose only .exes are known installers must not be a candidate
         let dir = tempfile::tempdir().unwrap();
         let odd = dir.path().join("SetupBundle");
         fs::create_dir(&odd).unwrap();
@@ -368,7 +374,6 @@ mod tests {
 
     #[test]
     fn test_engine_subdir_ignored() {
-        // Unreal's Engine/ subdirectory must not produce false candidates
         let dir = tempfile::tempdir().unwrap();
         let game = dir.path().join("MyGame");
         let engine = game.join("Engine").join("Binaries").join("Win64");
@@ -386,5 +391,26 @@ mod tests {
             "Engine/ must be ignored, only game root remains"
         );
         assert_eq!(candidates[0].path, game);
+    }
+
+    #[test]
+    fn test_steamrip_url_promotes_to_parent_as_game_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("Keep-Talking-SteamRIP.com");
+        let subdir = parent.join("KTANE.v1.9.24");
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(
+            parent.join("STEAMRIP \u{00BB} Free Pre-installed Steam Games.url"),
+            "[InternetShortcut]\nURL=https://steamrip.com",
+        )
+        .unwrap();
+        fs::write(subdir.join("ktane.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].path, parent,
+            "game root must be promoted to the parent containing the SteamRIP URL"
+        );
     }
 }

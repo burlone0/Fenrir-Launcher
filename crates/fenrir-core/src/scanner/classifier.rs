@@ -19,6 +19,7 @@ pub struct ClassifiedGame {
     pub crack_type: Option<CrackType>,
     pub confidence: u32,
     pub signature_name: String,
+    pub high_confidence_threshold: u32,
 }
 
 pub fn classify_candidate(
@@ -40,15 +41,15 @@ pub fn classify_candidate(
                 crack_type: sig.crack_type.as_deref().map(parse_crack),
                 confidence: score,
                 signature_name: sig.name.clone(),
+                high_confidence_threshold: sig
+                    .auto_add_threshold
+                    .unwrap_or(THRESHOLD_HIGH)
+                    .max(THRESHOLD_LOW),
             });
         }
     }
 
     best_match.map(|m| (best_score, m))
-}
-
-pub fn high_confidence_threshold() -> u32 {
-    THRESHOLD_HIGH
 }
 
 fn score_candidate(candidate: &GameCandidate, sig: &Signature) -> u32 {
@@ -86,28 +87,60 @@ fn score_candidate(candidate: &GameCandidate, sig: &Signature) -> u32 {
 fn file_exists_in_dir(dir: &Path, pattern: &str) -> bool {
     if pattern.ends_with('/') {
         let dir_name = pattern.trim_end_matches('/');
-        dir.join(dir_name).is_dir()
-    } else if pattern.contains('*') {
+        return dir.join(dir_name).is_dir();
+    }
+
+    if pattern.contains('*') {
         let glob_pattern = format!("{}/{}", dir.display(), pattern);
-        glob::glob(&glob_pattern)
+        return glob::glob(&glob_pattern)
             .map(|paths| paths.filter_map(|p| p.ok()).next().is_some())
-            .unwrap_or(false)
-    } else {
-        // Exact match, then case-insensitive fallback
-        if dir.join(pattern).exists() {
-            return true;
+            .unwrap_or(false);
+    }
+
+    // Exact match, then case-insensitive fallback at root
+    if dir.join(pattern).exists() {
+        return true;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.eq_ignore_ascii_case(pattern) {
+                    return true;
+                }
+            }
         }
+    }
+
+    // Unity deep scan: check <subdir>/Plugins/x86_64/ and <subdir>/Plugins/x86/
+    // Only for steam_api*.dll — other signatures don't hide their files in plugin dirs.
+    let pattern_lower = pattern.to_lowercase();
+    if pattern_lower == "steam_api.dll" || pattern_lower == "steam_api64.dll" {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.eq_ignore_ascii_case(pattern) {
+                let sub = entry.path();
+                if !sub.is_dir() {
+                    continue;
+                }
+                for plugin_subdir in &["Plugins/x86_64", "Plugins/x86"] {
+                    let plugin_dir = sub.join(plugin_subdir);
+                    if plugin_dir.join(pattern).exists() {
                         return true;
+                    }
+                    if let Ok(plugin_entries) = std::fs::read_dir(&plugin_dir) {
+                        for pe in plugin_entries.flatten() {
+                            if let Some(name) = pe.file_name().to_str() {
+                                if name.eq_ignore_ascii_case(pattern) {
+                                    return true;
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        false
     }
+
+    false
 }
 
 fn extract_title(path: &Path) -> String {
@@ -165,6 +198,7 @@ fn parse_crack(s: &str) -> CrackType {
         "FitGirl" => CrackType::FitGirl,
         "Scene" => CrackType::Scene,
         "GOGRip" => CrackType::GOGRip,
+        "SteamRIP" => CrackType::SteamRip,
         _ => CrackType::Unknown,
     }
 }
@@ -182,6 +216,7 @@ mod tests {
             required_files: vec!["steam_api.dll".to_string()],
             optional_files: vec!["steam_api64.dll".to_string(), "steam_appid.txt".to_string()],
             confidence_boost: vec!["steam_emu.ini".to_string()],
+            auto_add_threshold: None,
         }
     }
 
@@ -193,6 +228,7 @@ mod tests {
             required_files: vec!["OnlineFix.url".to_string()],
             optional_files: vec!["OnlineFix64.dll".to_string()],
             confidence_boost: vec![],
+            auto_add_threshold: None,
         }
     }
 
@@ -283,5 +319,154 @@ mod tests {
     #[test]
     fn test_clean_title_parentheses() {
         assert_eq!(clean_title("Dark Souls III (GOG)"), "Dark Souls III");
+    }
+
+    fn onlinefix_with_low_threshold() -> Signature {
+        Signature {
+            name: "OnlineFix Low Threshold".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: Some(30),
+        }
+    }
+
+    #[test]
+    fn test_auto_add_threshold_promotes_to_high() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+
+        let sig = onlinefix_with_low_threshold();
+        let result = classify_candidate(&candidate, &[sig]).unwrap();
+        let (score, classified) = result;
+        // score = 30 (1 required), threshold = 30 → high confidence
+        assert_eq!(score, 30);
+        assert_eq!(classified.high_confidence_threshold, 30);
+    }
+
+    #[test]
+    fn test_no_auto_add_threshold_uses_default_60() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+
+        // Same sig but WITHOUT auto_add_threshold
+        let sig = Signature {
+            name: "OnlineFix No Threshold".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+        };
+        let result = classify_candidate(&candidate, &[sig]).unwrap();
+        let (score, classified) = result;
+        assert_eq!(score, 30);
+        // high_confidence_threshold = 60 (default) → score < threshold → needs confirmation
+        assert_eq!(classified.high_confidence_threshold, 60);
+    }
+
+    #[test]
+    fn test_unity_deep_scan_finds_steam_api64_in_plugins_x86_64() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugins = dir
+            .path()
+            .join("GameName_Data")
+            .join("Plugins")
+            .join("x86_64");
+        fs::create_dir_all(&plugins).unwrap();
+        fs::write(plugins.join("steam_api64.dll"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        // file_exists_in_dir is private — test via score_candidate
+        let sig = Signature {
+            name: "Test".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["steam_api64.dll".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+        };
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "steam_api64.dll in Plugins/x86_64 must be detected"
+        );
+    }
+
+    #[test]
+    fn test_unity_deep_scan_finds_steam_api_in_plugins_x86() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugins = dir.path().join("SomeGame_Data").join("Plugins").join("x86");
+        fs::create_dir_all(&plugins).unwrap();
+        fs::write(plugins.join("steam_api.dll"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "Test".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["steam_api.dll".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+        };
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "steam_api.dll in Plugins/x86 must be detected"
+        );
+    }
+
+    #[test]
+    fn test_unity_deep_scan_not_triggered_for_non_steam_api_files() {
+        let dir = tempfile::tempdir().unwrap();
+        // Put OnlineFix.ini only in a deep subdirectory — should NOT be found
+        let subdir = dir.path().join("SomeData").join("Plugins").join("x86_64");
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(subdir.join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "Test".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+        };
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_none(),
+            "non-steam-api files must NOT be found in deep scan"
+        );
     }
 }
