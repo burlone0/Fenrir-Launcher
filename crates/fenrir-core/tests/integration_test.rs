@@ -657,3 +657,86 @@ fn test_all_crack_types_have_profiles() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Test 15 (Sprint 1 consolidation): scan of an Unreal-style layout classifies
+// the game at its real root, not the Binaries/Win64 subfolder.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_scan_unreal_layout_uses_real_root() {
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("EldenRing");
+    let bin_dir = game_dir.join("Game").join("Binaries").join("Win64");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join("eldenring.exe"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_appid.txt"), "1245620").unwrap();
+
+    let sigs_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
+    let sigs = signatures::load_signatures_from_dir(&sigs_dir).unwrap();
+
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 8).unwrap();
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+
+    assert_eq!(all.len(), 1, "exactly one classified game at the real root");
+    assert_eq!(all[0].path, game_dir);
+    assert_eq!(all[0].store_origin, StoreOrigin::Steam);
+    // steam_api64 (required=30) + steam_appid (optional=15) = 45 → needs_confirmation
+    assert!(all[0].confidence >= 30);
+}
+
+// ---------------------------------------------------------------------------
+// Test 16 (Sprint 1 consolidation): system-level redistributable directories
+// do not generate spurious candidates.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_scan_ignores_system_dirs_no_false_positives() {
+    let games_dir = tempdir().unwrap();
+
+    // A real game
+    let game = games_dir.path().join("RealGame");
+    fs::create_dir(&game).unwrap();
+    fs::write(game.join("game.exe"), "fake").unwrap();
+    fs::write(game.join("steam_api.dll"), "fake").unwrap();
+
+    // Redist noise next to the game
+    for noise in &["_CommonRedist", "DirectX", "_Redist", "vcredist"] {
+        let d = games_dir.path().join(noise);
+        fs::create_dir(&d).unwrap();
+        fs::write(d.join("installer.exe"), "fake").unwrap();
+    }
+
+    // Engine/ subdir inside the game (common for Unreal titles) with a helper exe
+    let engine = game.join("Engine").join("Binaries").join("Win64");
+    fs::create_dir_all(&engine).unwrap();
+    fs::write(engine.join("CrashReportClient.exe"), "fake").unwrap();
+
+    let sigs_dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
+    let sigs = signatures::load_signatures_from_dir(&sigs_dir).unwrap();
+
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 8).unwrap();
+    let all: Vec<_> = result
+        .high_confidence
+        .iter()
+        .chain(result.needs_confirmation.iter())
+        .collect();
+
+    assert_eq!(
+        all.len(),
+        1,
+        "only the real game must be classified — found {}",
+        all.iter()
+            .map(|g| g.title.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    assert_eq!(all[0].path, game);
+}
