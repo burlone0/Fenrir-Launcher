@@ -19,6 +19,7 @@ pub struct ClassifiedGame {
     pub crack_type: Option<CrackType>,
     pub confidence: u32,
     pub signature_name: String,
+    pub high_confidence_threshold: u32,
 }
 
 pub fn classify_candidate(
@@ -40,15 +41,15 @@ pub fn classify_candidate(
                 crack_type: sig.crack_type.as_deref().map(parse_crack),
                 confidence: score,
                 signature_name: sig.name.clone(),
+                high_confidence_threshold: sig
+                    .auto_add_threshold
+                    .unwrap_or(THRESHOLD_HIGH)
+                    .max(THRESHOLD_LOW),
             });
         }
     }
 
     best_match.map(|m| (best_score, m))
-}
-
-pub fn high_confidence_threshold() -> u32 {
-    THRESHOLD_HIGH
 }
 
 fn score_candidate(candidate: &GameCandidate, sig: &Signature) -> u32 {
@@ -183,6 +184,7 @@ mod tests {
             required_files: vec!["steam_api.dll".to_string()],
             optional_files: vec!["steam_api64.dll".to_string(), "steam_appid.txt".to_string()],
             confidence_boost: vec!["steam_emu.ini".to_string()],
+            auto_add_threshold: None,
         }
     }
 
@@ -194,6 +196,7 @@ mod tests {
             required_files: vec!["OnlineFix.url".to_string()],
             optional_files: vec!["OnlineFix64.dll".to_string()],
             confidence_boost: vec![],
+            auto_add_threshold: None,
         }
     }
 
@@ -284,5 +287,64 @@ mod tests {
     #[test]
     fn test_clean_title_parentheses() {
         assert_eq!(clean_title("Dark Souls III (GOG)"), "Dark Souls III");
+    }
+
+    fn onlinefix_with_low_threshold() -> Signature {
+        Signature {
+            name: "OnlineFix Low Threshold".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: Some(30),
+        }
+    }
+
+    #[test]
+    fn test_auto_add_threshold_promotes_to_high() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+
+        let sig = onlinefix_with_low_threshold();
+        let result = classify_candidate(&candidate, &[sig]).unwrap();
+        let (score, classified) = result;
+        // score = 30 (1 required), threshold = 30 → high confidence
+        assert_eq!(score, 30);
+        assert_eq!(classified.high_confidence_threshold, 30);
+    }
+
+    #[test]
+    fn test_no_auto_add_threshold_uses_default_60() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("game.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("game.exe")],
+        };
+
+        // Same sig but WITHOUT auto_add_threshold
+        let sig = Signature {
+            name: "OnlineFix No Threshold".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+        };
+        let result = classify_candidate(&candidate, &[sig]).unwrap();
+        let (score, classified) = result;
+        assert_eq!(score, 30);
+        // high_confidence_threshold = 60 (default) → score < threshold → needs confirmation
+        assert_eq!(classified.high_confidence_threshold, 60);
     }
 }

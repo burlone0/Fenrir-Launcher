@@ -3,7 +3,7 @@ pub mod detector;
 pub mod signatures;
 
 use crate::error::ScannerError;
-use classifier::{high_confidence_threshold, ClassifiedGame};
+use classifier::ClassifiedGame;
 use signatures::Signature;
 use std::path::Path;
 use tracing::info;
@@ -37,7 +37,7 @@ pub fn scan_directory(
 
     for candidate in &candidates {
         if let Some((score, classified)) = classifier::classify_candidate(candidate, signatures) {
-            if score >= high_confidence_threshold() {
+            if score >= classified.high_confidence_threshold {
                 high_confidence.push(classified);
             } else {
                 needs_confirmation.push(classified);
