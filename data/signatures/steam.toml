@@ -57,6 +57,7 @@ confidence_boost = ["steam_emu.ini", "cream_api.ini"]
 name = "OnlineFix"
 store = "Steam"
 crack_type = "OnlineFix"
+auto_add_threshold = 30
 required_files = ["OnlineFix.ini"]
 optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
@@ -150,3 +151,26 @@ crack_type = "OnlineFix"
 required_files = ["AnkerGames.url"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["steam_settings/"]
+
+# SteamRIP release -- identified by the "STEAMRIP » Free Pre-installed Steam Games.url"
+# shortcut bundled with every release. The » character is U+00BB.
+# auto_add_threshold = 30: the URL file alone is a sufficiently specific identifier.
+[steamrip]
+name = "SteamRIP"
+store = "Steam"
+crack_type = "SteamRIP"
+auto_add_threshold = 30
+required_files = ["STEAMRIP » Free Pre-installed Steam Games.url"]
+optional_files = ["Read_Me_Instructions.txt", "steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+
+# Steam pre-installed (DRM-free or BepInEx-modded) -- identified by steam_appid.txt alone.
+# Catches DRM-free games published on Steam (e.g. Among Us) that ship no steam_api*.dll.
+# When steam_api*.dll is also present a higher-scoring signature wins instead.
+# No auto_add_threshold: steam_appid.txt alone is low-specificity, needs manual confirmation.
+[steam_appid_only]
+name = "Steam Pre-installed"
+store = "Steam"
+required_files = ["steam_appid.txt"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = []
