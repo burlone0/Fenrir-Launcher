@@ -241,6 +241,9 @@ fn parse_crack_type(s: &str) -> CrackType {
         "FitGirl" => CrackType::FitGirl,
         "Scene" => CrackType::Scene,
         "GOG Rip" => CrackType::GOGRip,
+        "Steam Rip" => CrackType::SteamRip,
+        "SmokeAPI" => CrackType::SmokeAPI,
+        "Unsteam" => CrackType::Unsteam,
         _ => CrackType::Unknown,
     }
 }
