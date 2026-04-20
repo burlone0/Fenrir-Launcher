@@ -194,6 +194,19 @@ required_files = ["AstralGames ~ Pre-Installed Games.url"]
 optional_files = ["steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
 confidence_boost = []
 
+# SmokeAPI -- a DLC unlocker that patches steam_api(64).dll in-place. Identified by
+# SmokeAPI.config.json, which is always present next to the patched DLL. On Unreal Engine
+# games the file lives in Binaries/Win64/ or Binaries/Win32/ (covered by UE deep scan).
+# auto_add_threshold = 30: SmokeAPI.config.json alone is sufficiently specific to auto-add.
+[smokeapi]
+name = "SmokeAPI"
+store = "Steam"
+crack_type = "SmokeAPI"
+auto_add_threshold = 30
+required_files = ["SmokeAPI.config.json"]
+optional_files = ["SmokeAPI.log", "steam_api.dll", "steam_api64.dll"]
+confidence_boost = []
+
 # Steam pre-installed (DRM-free or BepInEx-modded) -- identified by steam_appid.txt alone.
 # Catches DRM-free games published on Steam (e.g. Among Us) that ship no steam_api*.dll.
 # When steam_api*.dll is also present a higher-scoring signature wins instead.

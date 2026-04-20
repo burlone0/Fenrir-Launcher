@@ -158,6 +158,8 @@ fn file_exists_in_dir(dir: &Path, pattern: &str) -> bool {
         "steam_api.dll",
         "steam_api64.dll",
         "steam_appid.txt",
+        "smokeapi.config.json",
+        "smokeapi.log",
     ];
     let pattern_lower = pattern.to_lowercase();
     if UE_BIN_MARKERS.contains(&pattern_lower.as_str()) {
@@ -359,6 +361,7 @@ fn parse_crack(s: &str) -> CrackType {
         "Scene" => CrackType::Scene,
         "GOGRip" => CrackType::GOGRip,
         "SteamRIP" => CrackType::SteamRip,
+        "SmokeAPI" => CrackType::SmokeAPI,
         _ => CrackType::Unknown,
     }
 }
@@ -829,6 +832,39 @@ mod tests {
             result.is_some(),
             "steam_api.dll in Binaries/Win32/ must be detected by UE deep scan"
         );
+    }
+
+    #[test]
+    fn test_ue_deep_scan_finds_smokeapi_config_in_binaries_win32() {
+        // Mimics Goat Simulator (UE3): SmokeAPI.config.json lives in Binaries/Win32/.
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir.path().join("Binaries").join("Win32");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("SmokeAPI.config.json"), "{}").unwrap();
+        fs::write(bin_dir.join("steam_api.dll"), "fake").unwrap();
+        fs::write(dir.path().join("GoatGame.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "SmokeAPI".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("SmokeAPI".to_string()),
+            required_files: vec!["SmokeAPI.config.json".to_string()],
+            optional_files: vec!["steam_api.dll".to_string()],
+            confidence_boost: vec![],
+            auto_add_threshold: Some(30),
+            cleanup_files: vec![],
+        };
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("GoatGame.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "SmokeAPI.config.json in Binaries/Win32/ must be detected by UE deep scan"
+        );
+        let (_, classified) = result.unwrap();
+        assert_eq!(classified.crack_type, Some(CrackType::SmokeAPI));
     }
 
     #[test]
