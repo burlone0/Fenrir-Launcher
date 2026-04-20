@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tracing::debug;
+use tracing::{debug, trace};
 use walkdir::WalkDir;
 
 const IGNORED_DIRS: &[&str] = &[
@@ -109,6 +109,15 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
         }
 
         let resolved = resolve_game_root(parent, root);
+        if resolved != parent {
+            trace!(
+                "exe {} → promoted root {}",
+                path.display(),
+                resolved.display()
+            );
+        } else {
+            trace!("exe {} → root {}", path.display(), resolved.display());
+        }
         grouped
             .entry(resolved)
             .or_default()
@@ -145,8 +154,21 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
     }
 
     // Step 4: drop candidates whose exes are *all* installers.
-    candidates.retain(|c| !is_installer_only(c));
+    candidates.retain(|c| {
+        let drop = is_installer_only(c);
+        if drop {
+            debug!("dropped installer-only candidate: {}", c.path.display());
+        }
+        !drop
+    });
 
+    for c in &candidates {
+        debug!(
+            "candidate: {} ({} exe(s))",
+            c.path.display(),
+            c.exe_files.len()
+        );
+    }
     debug!(
         "found {} game candidates in {}",
         candidates.len(),

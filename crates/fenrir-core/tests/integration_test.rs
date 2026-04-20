@@ -823,3 +823,92 @@ fn test_scan_ignores_system_dirs_no_false_positives() {
     );
     assert_eq!(all[0].path, game);
 }
+
+// ---------------------------------------------------------------------------
+// Test 17 (Sprint 1): Full pipeline — scan → DB → configure state → launch cmd
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_full_pipeline_scan_to_launch_command() {
+    use fenrir_core::launcher::runner::{build_launch_command, LaunchConfig};
+    use std::collections::HashMap;
+
+    // 1. Fake game on disk
+    let games_dir = tempdir().unwrap();
+    let game_dir = games_dir.path().join("Hollow Knight");
+    fs::create_dir(&game_dir).unwrap();
+    fs::write(game_dir.join("hollow_knight.exe"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_api64.dll"), "fake").unwrap();
+    fs::write(game_dir.join("steam_appid.txt"), "367520").unwrap();
+
+    let sigs = signatures::parse_signatures_from_str(
+        r#"
+[steam_generic]
+name = "Steam Generic Crack"
+store = "Steam"
+required_files = ["steam_api.dll"]
+optional_files = ["steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+"#,
+    )
+    .unwrap();
+
+    // 2. Scan
+    let result = scanner::scan_directory(games_dir.path(), &sigs, 4).unwrap();
+    assert_eq!(result.high_confidence.len(), 1);
+    let classified = &result.high_confidence[0];
+    assert_eq!(classified.title, "Hollow Knight");
+
+    // 3. Persist as Detected
+    let db = Database::open_in_memory().unwrap();
+    let game_id = uuid::Uuid::new_v4();
+    let exe = classified.exe_files.first().cloned().unwrap();
+    let mut game = Game {
+        id: game_id,
+        title: classified.title.clone(),
+        executable: exe.clone(),
+        install_dir: classified.path.clone(),
+        store_origin: classified.store_origin,
+        crack_type: classified.crack_type,
+        prefix_path: PathBuf::new(),
+        runtime_id: None,
+        status: GameStatus::Detected,
+        play_time: 0,
+        last_played: None,
+        added_at: chrono::Utc::now(),
+        user_overrides: None,
+    };
+    db.insert_game(&game).unwrap();
+
+    // 4. Simulate configure
+    let prefix_dir = tempdir().unwrap();
+    let prefix_path = fenrir_core::prefix::prefix_path_for_game(prefix_dir.path(), game_id);
+    game.prefix_path = prefix_path.clone();
+    game.runtime_id = Some("GE-Proton9-20".to_string());
+    game.status = GameStatus::Configured;
+    db.update_game(&game).unwrap();
+
+    // 5. Build launch command (Wine path)
+    let launch_cmd = build_launch_command(&LaunchConfig {
+        executable: game.executable.clone(),
+        wine_binary: PathBuf::from("/usr/bin/wine"),
+        prefix_path: game.prefix_path.clone(),
+        env_vars: HashMap::new(),
+        is_proton: false,
+        proton_path: None,
+        steam_app_id: None,
+    });
+
+    // 6. Verify the full chain produced a valid command
+    let fetched = db.get_game(game_id).unwrap().unwrap();
+    assert_eq!(fetched.status, GameStatus::Configured);
+    assert_eq!(fetched.title, "Hollow Knight");
+    assert_eq!(launch_cmd.program, "/usr/bin/wine");
+    assert_eq!(launch_cmd.args, vec![exe.to_string_lossy().as_ref()]);
+    assert_eq!(
+        launch_cmd.env.get("WINEPREFIX").unwrap(),
+        &prefix_path.to_string_lossy().to_string()
+    );
+    assert_eq!(launch_cmd.working_dir, game_dir);
+}
