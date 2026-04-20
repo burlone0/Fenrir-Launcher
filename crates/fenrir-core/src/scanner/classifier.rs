@@ -332,6 +332,7 @@ mod tests {
             optional_files: vec![],
             confidence_boost: vec![],
             auto_add_threshold: Some(30),
+            cleanup_files: vec![],
         }
     }
 
@@ -374,6 +375,7 @@ mod tests {
             optional_files: vec![],
             confidence_boost: vec![],
             auto_add_threshold: None,
+            cleanup_files: vec![],
         };
         let result = classify_candidate(&candidate, &[sig]).unwrap();
         let (score, classified) = result;
@@ -403,6 +405,7 @@ mod tests {
             optional_files: vec![],
             confidence_boost: vec![],
             auto_add_threshold: None,
+            cleanup_files: vec![],
         };
         let candidate = GameCandidate {
             path: dir.path().to_path_buf(),
@@ -431,6 +434,7 @@ mod tests {
             optional_files: vec![],
             confidence_boost: vec![],
             auto_add_threshold: None,
+            cleanup_files: vec![],
         };
         let candidate = GameCandidate {
             path: dir.path().to_path_buf(),
@@ -460,6 +464,7 @@ mod tests {
             optional_files: vec![],
             confidence_boost: vec![],
             auto_add_threshold: None,
+            cleanup_files: vec![],
         };
         let candidate = GameCandidate {
             path: dir.path().to_path_buf(),
