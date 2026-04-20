@@ -61,6 +61,7 @@ auto_add_threshold = 30
 required_files = ["OnlineFix.ini"]
 optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
+cleanup_files = ["OnlineFix.url", "_Redist/", "setup.exe", "autorun.inf", "*.url"]
 
 # FitGirl Repack -- identified by the fitgirl-repacks.site marker file.
 # FitGirl repacks are heavily compressed; the game directory looks like
@@ -72,6 +73,7 @@ crack_type = "FitGirl"
 required_files = ["fitgirl-repacks.site"]
 optional_files = ["md5.txt"]
 confidence_boost = ["steam_api.dll"]
+cleanup_files = ["fitgirl-repacks.site.url", "_CommonRedist/", "setup.exe", "autorun.inf", "*.url"]
 
 # DODI Repack -- identified by the "DODI Repacks/" marker directory.
 # Similar to FitGirl, the installed game is a standard Steam crack
@@ -83,6 +85,7 @@ crack_type = "DODI"
 required_files = ["DODI Repacks/"]
 optional_files = ["_Redist/"]
 confidence_boost = ["steam_api.dll"]
+cleanup_files = ["_Redist/", "_CommonRedist/", "setup.exe", "autorun.inf", "*.url"]
 
 # Scene release -- identified by the presence of an .nfo file.
 # Scene releases sometimes split the game across multiple disc directories.

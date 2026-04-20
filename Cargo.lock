@@ -360,6 +360,7 @@ dependencies = [
  "fenrir-core",
  "indicatif",
  "reqwest",
+ "serde_json",
  "tokio",
  "toml",
  "tracing",

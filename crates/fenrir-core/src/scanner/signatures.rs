@@ -15,6 +15,8 @@ pub struct Signature {
     pub confidence_boost: Vec<String>,
     #[serde(default)]
     pub auto_add_threshold: Option<u32>,
+    #[serde(default)]
+    pub cleanup_files: Vec<String>,
 }
 
 pub fn parse_signatures_from_str(content: &str) -> Result<Vec<Signature>, ScannerError> {
