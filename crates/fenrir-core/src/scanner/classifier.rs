@@ -36,7 +36,10 @@ pub fn classify_candidate(
             best_match = Some(ClassifiedGame {
                 path: candidate.path.clone(),
                 exe_files: candidate.exe_files.clone(),
-                title: extract_title(&candidate.path),
+                title: extract_title(&compute_best_title_path(
+                    &candidate.path,
+                    &candidate.exe_files,
+                )),
                 store_origin: parse_store(&sig.store),
                 crack_type: sig.crack_type.as_deref().map(parse_crack),
                 confidence: score,
@@ -159,6 +162,71 @@ fn extract_title(path: &Path) -> String {
     clean_title(dirname)
 }
 
+/// Returns true if `dir` is a distribution wrapper (not the real game directory).
+/// Detection via URL marker file (preferred) or AstralGames naming convention (~AG suffix).
+fn is_wrapper_dir(dir: &Path) -> bool {
+    const WRAPPER_MARKERS: &[&str] = &["AstralGames ~ Pre-Installed Games.url"];
+    for marker in WRAPPER_MARKERS {
+        if dir.join(marker).exists() {
+            return true;
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                for marker in WRAPPER_MARKERS {
+                    if name.eq_ignore_ascii_case(marker) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    // AstralGames uploaders name the outer folder with a "~AG" suffix even when the URL
+    // shortcut was deleted. Match case-insensitively so "~ag" variants are also caught.
+    if let Some(name) = dir.file_name().and_then(|n| n.to_str()) {
+        if name.to_uppercase().ends_with("~AG") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns the direct child directory of `game_root` that is an ancestor of `exe`.
+/// Returns `None` when `exe` is directly inside `game_root` (no subfolder between them).
+fn direct_child_toward_exe(game_root: &Path, exe: &Path) -> Option<std::path::PathBuf> {
+    let mut path = exe;
+    loop {
+        let parent = path.parent()?;
+        if parent == game_root {
+            return if path.is_dir() {
+                Some(path.to_path_buf())
+            } else {
+                None
+            };
+        }
+        path = parent;
+    }
+}
+
+/// Picks the best path to extract the game title from.
+/// For wrapper directories (e.g. AstralGames), uses the subfolder that contains the exe.
+/// Iterates all exe files because the first entry may be a root-level launcher/setup that
+/// would resolve to None, while the real game exe is in a subfolder.
+fn compute_best_title_path(
+    game_root: &Path,
+    exe_files: &[std::path::PathBuf],
+) -> std::path::PathBuf {
+    if is_wrapper_dir(game_root) {
+        for exe in exe_files {
+            if let Some(child) = direct_child_toward_exe(game_root, exe) {
+                return child;
+            }
+        }
+    }
+    game_root.to_path_buf()
+}
+
 pub fn clean_title(name: &str) -> String {
     let mut title = name.to_string();
 
@@ -179,6 +247,10 @@ pub fn clean_title(name: &str) -> String {
             break;
         }
     }
+
+    // Strip distribution-site suffixes before dot replacement (e.g. "Game-SteamRIP.com" → "Game")
+    let re_site = regex_lite::Regex::new(r"(?i)[-.]steamrip(?:\.com)?$").unwrap();
+    title = re_site.replace(&title, "").to_string();
 
     // Remove trailing version patterns BEFORE dot replacement (e.g. .v2.1.3)
     let re_ver = regex_lite::Regex::new(r"[.\s-]*v?\d+\.\d+(\.\d+)*\s*$").unwrap();
@@ -452,6 +524,91 @@ mod tests {
         assert!(
             result.is_some(),
             "steam_api.dll in Plugins/x86 must be detected"
+        );
+    }
+
+    #[test]
+    fn test_clean_title_strips_steamrip_suffix() {
+        assert_eq!(clean_title("Egging-On-SteamRIP.com"), "Egging-On");
+        assert_eq!(clean_title("Keep Talking-SteamRIP"), "Keep Talking");
+        assert_eq!(clean_title("Papers Please.SteamRIP"), "Papers Please");
+    }
+
+    #[test]
+    fn test_classify_uses_subfolder_title_for_astral_games_wrapper() {
+        // Real layout: wrapper root has AstralGames URL, game files live one level deeper.
+        // steam_api64.dll is in YAPYAP/Plugins/x86_64/ (Unity layout) so the Unity deep scan
+        // finds it when scoring from the wrapper root, while the exe is in YAPYAP/.
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("AstralGames ~ Pre-Installed Games.url"),
+            "fake",
+        )
+        .unwrap();
+        let game_sub = dir.path().join("YAPYAP");
+        let plugins = game_sub.join("Plugins").join("x86_64");
+        fs::create_dir_all(&plugins).unwrap();
+        fs::write(plugins.join("steam_api64.dll"), "fake").unwrap();
+        fs::write(game_sub.join("yapyap.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "Steam Generic 64".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["steam_api64.dll".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+            cleanup_files: vec![],
+        };
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![game_sub.join("yapyap.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "must detect steam_api64.dll via Unity deep scan through wrapper"
+        );
+        let (_, classified) = result.unwrap();
+        assert_eq!(
+            classified.title, "YAPYAP",
+            "title must come from subfolder, not wrapper root"
+        );
+    }
+
+    #[test]
+    fn test_classify_uses_subfolder_title_for_ag_named_wrapper_no_url_file() {
+        // URL file deleted: wrapper detected by "~AG" folder name suffix alone.
+        let base = tempfile::tempdir().unwrap();
+        let wrapper = base.path().join("YY B21832759~AG");
+        let game_sub = wrapper.join("YAPYAP");
+        let plugins = game_sub.join("Plugins").join("x86_64");
+        fs::create_dir_all(&plugins).unwrap();
+        fs::write(plugins.join("steam_api64.dll"), "fake").unwrap();
+        fs::write(game_sub.join("yapyap.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "Steam Generic 64".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["steam_api64.dll".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+            cleanup_files: vec![],
+        };
+        let candidate = GameCandidate {
+            path: wrapper.clone(),
+            exe_files: vec![game_sub.join("yapyap.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(result.is_some(), "must detect via Unity deep scan");
+        let (_, classified) = result.unwrap();
+        assert_eq!(
+            classified.title, "YAPYAP",
+            "~AG name must trigger wrapper detection"
         );
     }
 
