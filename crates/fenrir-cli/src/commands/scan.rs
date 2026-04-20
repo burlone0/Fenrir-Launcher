@@ -45,58 +45,91 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
         );
 
         for classified in &result.high_confidence {
-            let game = Game {
-                id: uuid::Uuid::new_v4(),
-                title: classified.title.clone(),
-                executable: classified.exe_files.first().cloned().unwrap_or_default(),
-                install_dir: classified.path.clone(),
-                store_origin: classified.store_origin,
-                crack_type: classified.crack_type,
-                prefix_path: PathBuf::new(),
-                runtime_id: None,
-                status: GameStatus::Detected,
-                play_time: 0,
-                last_played: None,
-                added_at: chrono::Utc::now(),
-                user_overrides: None,
-            };
-
-            db.insert_game(&game)?;
-            println!(
-                "  [+] {} ({}, {:?}) — confidence: {}",
-                classified.title,
-                classified.store_origin,
-                classified.crack_type,
-                classified.confidence,
-            );
+            let exe = classified.exe_files.first().cloned().unwrap_or_default();
+            match db.find_by_install_dir(&classified.path)? {
+                Some(mut existing) => {
+                    existing.title = classified.title.clone();
+                    existing.executable = exe;
+                    existing.store_origin = classified.store_origin;
+                    existing.crack_type = classified.crack_type;
+                    if existing.status == GameStatus::NeedsConfirmation {
+                        existing.status = GameStatus::Detected;
+                    }
+                    db.update_game(&existing)?;
+                    println!(
+                        "  [~] {} ({}, {:?}) — updated",
+                        classified.title, classified.store_origin, classified.crack_type,
+                    );
+                }
+                None => {
+                    let game = Game {
+                        id: uuid::Uuid::new_v4(),
+                        title: classified.title.clone(),
+                        executable: exe,
+                        install_dir: classified.path.clone(),
+                        store_origin: classified.store_origin,
+                        crack_type: classified.crack_type,
+                        prefix_path: PathBuf::new(),
+                        runtime_id: None,
+                        status: GameStatus::Detected,
+                        play_time: 0,
+                        last_played: None,
+                        added_at: chrono::Utc::now(),
+                        user_overrides: None,
+                    };
+                    db.insert_game(&game)?;
+                    println!(
+                        "  [+] {} ({}, {:?}) — confidence: {}",
+                        classified.title,
+                        classified.store_origin,
+                        classified.crack_type,
+                        classified.confidence,
+                    );
+                }
+            }
         }
 
         for classified in &result.needs_confirmation {
-            let game = Game {
-                id: uuid::Uuid::new_v4(),
-                title: classified.title.clone(),
-                executable: classified.exe_files.first().cloned().unwrap_or_default(),
-                install_dir: classified.path.clone(),
-                store_origin: classified.store_origin,
-                crack_type: classified.crack_type,
-                prefix_path: PathBuf::new(),
-                runtime_id: None,
-                status: GameStatus::NeedsConfirmation,
-                play_time: 0,
-                last_played: None,
-                added_at: chrono::Utc::now(),
-                user_overrides: None,
-            };
-
-            db.insert_game(&game)?;
-            println!(
-                "  [?] {} ({}, {:?}) — confidence: {} — run 'fenrir confirm \"{}\"' to add",
-                classified.title,
-                classified.store_origin,
-                classified.crack_type,
-                classified.confidence,
-                classified.title,
-            );
+            let exe = classified.exe_files.first().cloned().unwrap_or_default();
+            match db.find_by_install_dir(&classified.path)? {
+                Some(mut existing) => {
+                    existing.title = classified.title.clone();
+                    existing.executable = exe;
+                    existing.store_origin = classified.store_origin;
+                    existing.crack_type = classified.crack_type;
+                    db.update_game(&existing)?;
+                    println!(
+                        "  [~] {} ({}, {:?}) — updated",
+                        classified.title, classified.store_origin, classified.crack_type,
+                    );
+                }
+                None => {
+                    let game = Game {
+                        id: uuid::Uuid::new_v4(),
+                        title: classified.title.clone(),
+                        executable: exe,
+                        install_dir: classified.path.clone(),
+                        store_origin: classified.store_origin,
+                        crack_type: classified.crack_type,
+                        prefix_path: PathBuf::new(),
+                        runtime_id: None,
+                        status: GameStatus::NeedsConfirmation,
+                        play_time: 0,
+                        last_played: None,
+                        added_at: chrono::Utc::now(),
+                        user_overrides: None,
+                    };
+                    db.insert_game(&game)?;
+                    println!(
+                        "  [?] {} ({}, {:?}) — confidence: {} — run 'fenrir confirm \"{}\"' to add",
+                        classified.title,
+                        classified.store_origin,
+                        classified.crack_type,
+                        classified.confidence,
+                        classified.title,
+                    );
+                }
+            }
         }
     }
 
