@@ -152,6 +152,22 @@ impl Database {
         Ok(())
     }
 
+    pub fn find_by_install_dir(
+        &self,
+        install_dir: &std::path::Path,
+    ) -> Result<Option<Game>, DatabaseError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title, executable, install_dir, store_origin, crack_type,
+             prefix_path, runtime_id, status, play_time, last_played, added_at,
+             user_overrides FROM games WHERE install_dir = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query(params![install_dir.to_string_lossy().to_string()])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row_to_game(row)?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn find_by_title(&self, query: &str) -> Result<Vec<Game>, DatabaseError> {
         let pattern = format!("%{}%", query);
         let mut stmt = self.conn.prepare(
