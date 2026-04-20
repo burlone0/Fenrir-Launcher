@@ -50,6 +50,7 @@ const ROOT_MARKERS: &[&str] = &[
     "galaxy.dll",
     "game.id",
     "STEAMRIP \u{00BB} Free Pre-installed Steam Games.url",
+    "AstralGames ~ Pre-Installed Games.url",
 ];
 
 /// Glob markers (substring-based, simple prefix+suffix match). Kept minimal
@@ -194,6 +195,14 @@ fn resolve_game_root(start: &Path, scan_root: &Path) -> PathBuf {
 }
 
 fn has_root_marker(dir: &Path) -> bool {
+    // Directory-name markers: a folder ending in "-SteamRIP.com" is itself a game root.
+    // This handles the common case where the SteamRIP URL shortcut has been deleted.
+    if let Some(name) = dir.file_name().and_then(|n| n.to_str()) {
+        if name.to_ascii_lowercase().ends_with("-steamrip.com") {
+            return true;
+        }
+    }
+
     // Exact-name markers (case-insensitive)
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -413,6 +422,45 @@ mod tests {
             "Engine/ must be ignored, only game root remains"
         );
         assert_eq!(candidates[0].path, game);
+    }
+
+    #[test]
+    fn test_steamrip_dirname_promotes_without_url_file() {
+        // Simulates Keep Talking: the SteamRIP URL shortcut was deleted, but the
+        // parent folder name still ends with -SteamRIP.com → must still be promoted.
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("Keep-Talking-SteamRIP.com");
+        let subdir = parent.join("KTANE.v1.9.24");
+        fs::create_dir_all(&subdir).unwrap();
+        // No URL file — relies purely on directory name
+        fs::write(subdir.join("ktane.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].path, parent,
+            "game root must be promoted to the -SteamRIP.com parent even without the URL file"
+        );
+    }
+
+    #[test]
+    fn test_astral_games_url_promotes_to_parent_as_game_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("YY B21832759~AG");
+        fs::create_dir_all(&parent).unwrap();
+        fs::write(
+            parent.join("AstralGames ~ Pre-Installed Games.url"),
+            "[InternetShortcut]\nURL=https://astralgames.net",
+        )
+        .unwrap();
+        fs::write(parent.join("yapyap.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].path, parent,
+            "game root must be the folder containing the AstralGames URL"
+        );
     }
 
     #[test]
