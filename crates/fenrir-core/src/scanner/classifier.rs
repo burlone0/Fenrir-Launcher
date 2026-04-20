@@ -53,11 +53,19 @@ pub fn classify_candidate(
 }
 
 fn score_candidate(candidate: &GameCandidate, sig: &Signature) -> u32 {
-    let all_required = sig
+    let missing: Vec<&str> = sig
         .required_files
         .iter()
-        .all(|f| file_exists_in_dir(&candidate.path, f));
-    if !all_required {
+        .filter(|f| !file_exists_in_dir(&candidate.path, f))
+        .map(|f| f.as_str())
+        .collect();
+    if !missing.is_empty() {
+        debug!(
+            "skip '{}' for {}: missing required [{}]",
+            sig.name,
+            candidate.path.display(),
+            missing.join(", ")
+        );
         return 0;
     }
 
