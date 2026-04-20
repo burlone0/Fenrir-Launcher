@@ -165,9 +165,22 @@ cleanup_files = ["AnkerGames*.url", "_Redist/", "_CommonRedist/", "autorun.inf",
 [unsteam]
 name = "unsteam"
 store = "Steam"
+crack_type = "Unsteam"
 auto_add_threshold = 30
 required_files = ["unsteam.ini"]
 optional_files = ["unsteam.dll", "steam_appid.txt"]
+confidence_boost = []
+
+# ColdClientLoader -- an alternative Steam API bypass by jiang0681 that loads a custom
+# steamclient64.dll via a dedicated loader. Identified by ColdClientLoader.ini, which
+# is always present and contains the loader configuration. Different from unsteam (@emberantz).
+[cold_client_loader]
+name = "ColdClientLoader"
+store = "Steam"
+crack_type = "Unsteam"
+auto_add_threshold = 30
+required_files = ["ColdClientLoader.ini"]
+optional_files = ["steamclient_loader.exe", "steamclient64.dll", "steamclient.dll"]
 confidence_boost = []
 
 # SteamRIP release -- identified by the "STEAMRIP » Free Pre-installed Steam Games.url"

@@ -96,10 +96,10 @@ confidence_boost = []
         let sig_dir =
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
         let sigs = load_signatures_from_dir(&sig_dir).unwrap();
-        // steam (original + smokeapi + others) + gog + epic = at least 15
+        // steam (original + smokeapi + coldclientloader + others) + gog + epic = at least 16
         assert!(
-            sigs.len() >= 15,
-            "expected at least 15 signatures, got {}",
+            sigs.len() >= 16,
+            "expected at least 16 signatures, got {}",
             sigs.len()
         );
         // Every signature must declare at least one required file to be useful

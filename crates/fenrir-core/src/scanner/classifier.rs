@@ -362,6 +362,7 @@ fn parse_crack(s: &str) -> CrackType {
         "GOGRip" => CrackType::GOGRip,
         "SteamRIP" => CrackType::SteamRip,
         "SmokeAPI" => CrackType::SmokeAPI,
+        "Unsteam" => CrackType::Unsteam,
         _ => CrackType::Unknown,
     }
 }
