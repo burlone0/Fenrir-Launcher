@@ -145,15 +145,30 @@ required_files = ["empress.nfo"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["empress64.dll"]
 
-# AnkerGames -- identified by AnkerGames.url, a website shortcut bundled with
-# the crack. Similar to OnlineFix, uses steam_settings/ for LAN emulation.
+# AnkerGames -- identified by an "AnkerGames*.url" shortcut bundled with every release.
+# The exact filename varies (e.g. "AnkerGames.url", "AnkerGames - Free Pre-installed PC Games.url"),
+# so a glob is required. Similar to OnlineFix, uses steam_settings/ for LAN emulation.
 [ankergames]
 name = "AnkerGames"
 store = "Steam"
 crack_type = "OnlineFix"
-required_files = ["AnkerGames.url"]
+auto_add_threshold = 30
+required_files = ["AnkerGames*.url"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["steam_settings/"]
+cleanup_files = ["AnkerGames*.url", "_Redist/", "_CommonRedist/", "autorun.inf", "*.url"]
+
+# unsteam -- DRM bypass that hooks the Steam API at load time via unsteam.dll/unsteam.ini.
+# Used in pre-installed releases where the game ships with no steam_api*.dll replacement.
+# Markers are often buried in Binaries/Win64/ for Unreal Engine titles.
+# auto_add_threshold = 30: unsteam.ini is sufficiently specific to auto-add.
+[unsteam]
+name = "unsteam"
+store = "Steam"
+auto_add_threshold = 30
+required_files = ["unsteam.ini"]
+optional_files = ["unsteam.dll", "steam_appid.txt"]
+confidence_boost = []
 
 # SteamRIP release -- identified by the "STEAMRIP » Free Pre-installed Steam Games.url"
 # shortcut bundled with every release. The » character is U+00BB.

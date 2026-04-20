@@ -36,7 +36,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         println!("scanning {}...", dir.display());
-        let result = scanner::scan_directory(dir, &sigs, 4)?;
+        let result = scanner::scan_directory(dir, &sigs, 6)?;
         println!(
             "found {} candidates, {} high confidence, {} need confirmation",
             result.total_candidates,

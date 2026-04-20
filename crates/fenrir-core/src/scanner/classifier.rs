@@ -145,9 +145,66 @@ fn file_exists_in_dir(dir: &Path, pattern: &str) -> bool {
         }
     }
 
+    // UE deep scan: crack files live in Binaries/Win64/ (or Win32/) — either directly
+    // inside the candidate dir, or one subdir level deeper (launcher-stub layout).
+    // Covers: DontScream-style (dir/Binaries/Win64/marker) and
+    //         KEEP GAMBLING-style (dir/GameName/Binaries/Win64/marker).
+    const UE_BIN_MARKERS: &[&str] = &[
+        "onlinefix.ini",
+        "onlinefix64.dll",
+        "onlinefix.url",
+        "unsteam.ini",
+        "unsteam.dll",
+        "steam_api.dll",
+        "steam_api64.dll",
+        "steam_appid.txt",
+    ];
+    let pattern_lower = pattern.to_lowercase();
+    if UE_BIN_MARKERS.contains(&pattern_lower.as_str()) {
+        for bin_subdir in &["Binaries/Win64", "Binaries/Win32"] {
+            // Direct: <dir>/Binaries/Win64/<file>
+            let bin_dir = dir.join(bin_subdir);
+            if bin_dir.join(pattern).exists() {
+                return true;
+            }
+            if let Ok(bin_entries) = std::fs::read_dir(&bin_dir) {
+                for be in bin_entries.flatten() {
+                    if let Some(name) = be.file_name().to_str() {
+                        if name.eq_ignore_ascii_case(pattern) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        // One subdir deeper: <dir>/<name>/Binaries/Win64/<file>
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let sub = entry.path();
+                if !sub.is_dir() {
+                    continue;
+                }
+                for bin_subdir in &["Binaries/Win64", "Binaries/Win32"] {
+                    let bin_dir = sub.join(bin_subdir);
+                    if bin_dir.join(pattern).exists() {
+                        return true;
+                    }
+                    if let Ok(bin_entries) = std::fs::read_dir(&bin_dir) {
+                        for be in bin_entries.flatten() {
+                            if let Some(name) = be.file_name().to_str() {
+                                if name.eq_ignore_ascii_case(pattern) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Unity deep scan: check <subdir>/Plugins/x86_64/ and <subdir>/Plugins/x86/
     // Only for steam_api*.dll — other signatures don't hide their files in plugin dirs.
-    let pattern_lower = pattern.to_lowercase();
     if pattern_lower == "steam_api.dll" || pattern_lower == "steam_api64.dll" {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
@@ -689,6 +746,109 @@ mod tests {
         assert!(
             result.is_none(),
             "non-steam-api files must NOT be found in deep scan"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // UE deep scan: markers buried in Binaries/Win64/ or <subdir>/Binaries/Win64/
+    // -----------------------------------------------------------------------
+
+    fn unsteam_signature() -> Signature {
+        Signature {
+            name: "unsteam".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["unsteam.ini".to_string()],
+            optional_files: vec!["unsteam.dll".to_string()],
+            confidence_boost: vec![],
+            auto_add_threshold: Some(30),
+            cleanup_files: vec![],
+        }
+    }
+
+    fn onlinefix_ue_signature() -> Signature {
+        Signature {
+            name: "OnlineFix UE".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: Some(30),
+            cleanup_files: vec![],
+        }
+    }
+
+    #[test]
+    fn test_ue_deep_scan_finds_unsteam_ini_in_binaries_win64_direct() {
+        // Mimics DontScream: candidate root has no marker at root level,
+        // but unsteam.ini lives directly in Binaries/Win64/.
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir.path().join("Binaries").join("Win64");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("unsteam.ini"), "fake").unwrap();
+        fs::write(dir.path().join("DontScream-Win64-Shipping.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("DontScream-Win64-Shipping.exe")],
+        };
+        let result = classify_candidate(&candidate, &[unsteam_signature()]);
+        assert!(
+            result.is_some(),
+            "unsteam.ini in Binaries/Win64/ must be detected by UE deep scan"
+        );
+    }
+
+    #[test]
+    fn test_ue_deep_scan_finds_steam_api_in_binaries_win32_direct() {
+        // Mimics Goat Simulator (after promote_out_of_bin_dir): candidate is the game root,
+        // steam_api.dll is in Binaries/Win32/ directly under the candidate.
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir.path().join("Binaries").join("Win32");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("steam_api.dll"), "fake").unwrap();
+        fs::write(dir.path().join("GoatGame.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("GoatGame.exe")],
+        };
+        let sig = Signature {
+            name: "Steam Generic".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: None,
+            required_files: vec!["steam_api.dll".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+            cleanup_files: vec![],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "steam_api.dll in Binaries/Win32/ must be detected by UE deep scan"
+        );
+    }
+
+    #[test]
+    fn test_ue_deep_scan_finds_onlinefix_ini_one_subdir_deep() {
+        // Mimics KEEP GAMBLING: candidate root is the game root (e.g. KEEP GAMBLING/),
+        // OnlineFix.ini is at KEEP GAMBLING/Kaching/Binaries/Win64/OnlineFix.ini.
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir.path().join("Kaching").join("Binaries").join("Win64");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("launcher.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("launcher.exe")],
+        };
+        let result = classify_candidate(&candidate, &[onlinefix_ue_signature()]);
+        assert!(
+            result.is_some(),
+            "OnlineFix.ini in <subdir>/Binaries/Win64/ must be detected by UE deep scan"
         );
     }
 }
