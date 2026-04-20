@@ -52,6 +52,29 @@ pub fn classify_candidate(
         }
     }
 
+    // Dirname fallback for DRM-free SteamRIP releases that have no steam_api*.dll or marker
+    // files. SteamRIP always names the root folder with a "-SteamRIP.com" or "-SteamRIP"
+    // suffix, which is a reliable enough identifier to auto-add.
+    if best_score == 0 {
+        if let Some(name) = candidate.path.file_name().and_then(|n| n.to_str()) {
+            let upper = name.to_uppercase();
+            if upper.ends_with("-STEAMRIP.COM") || upper.ends_with("-STEAMRIP") {
+                let title = extract_title(&candidate.path);
+                best_score = THRESHOLD_LOW;
+                best_match = Some(ClassifiedGame {
+                    path: candidate.path.clone(),
+                    exe_files: candidate.exe_files.clone(),
+                    title,
+                    store_origin: StoreOrigin::Steam,
+                    crack_type: Some(CrackType::SteamRip),
+                    confidence: THRESHOLD_LOW,
+                    signature_name: "SteamRIP (dirname)".to_string(),
+                    high_confidence_threshold: THRESHOLD_LOW,
+                });
+            }
+        }
+    }
+
     best_match.map(|m| (best_score, m))
 }
 
@@ -525,6 +548,33 @@ mod tests {
             result.is_some(),
             "steam_api.dll in Plugins/x86 must be detected"
         );
+    }
+
+    #[test]
+    fn test_steamrip_dirname_fallback_drm_free() {
+        // DRM-free SteamRIP game: no steam_api*.dll, no marker files inside the folder.
+        // Detection must fall back to the directory name convention.
+        let base = tempfile::tempdir().unwrap();
+        let game_dir = base
+            .path()
+            .join("Keep-Talking-and-Nobody-Explodes-SteamRIP.com");
+        fs::create_dir(&game_dir).unwrap();
+        fs::write(game_dir.join("KeepTalking.exe"), "fake").unwrap();
+
+        let candidate = GameCandidate {
+            path: game_dir.clone(),
+            exe_files: vec![game_dir.join("KeepTalking.exe")],
+        };
+        let result = classify_candidate(&candidate, &[steam_signature()]);
+        assert!(
+            result.is_some(),
+            "DRM-free SteamRIP game must be detected via dirname"
+        );
+        let (score, classified) = result.unwrap();
+        assert_eq!(score, THRESHOLD_LOW);
+        assert_eq!(classified.high_confidence_threshold, THRESHOLD_LOW);
+        assert_eq!(classified.crack_type, Some(CrackType::SteamRip));
+        assert_eq!(classified.title, "Keep-Talking-and-Nobody-Explodes");
     }
 
     #[test]
