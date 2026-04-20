@@ -167,6 +167,18 @@ required_files = ["STEAMRIP » Free Pre-installed Steam Games.url"]
 optional_files = ["Read_Me_Instructions.txt", "steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
 confidence_boost = []
 
+# AstralGames release -- identified by "AstralGames ~ Pre-Installed Games.url", a website
+# shortcut bundled with every release. AstralGames distributes pre-installed Steam games
+# similarly to SteamRIP; the marker file is sufficiently specific to auto-add.
+[astral_games]
+name = "AstralGames"
+store = "Steam"
+crack_type = "OnlineFix"
+auto_add_threshold = 30
+required_files = ["AstralGames ~ Pre-Installed Games.url"]
+optional_files = ["steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+
 # Steam pre-installed (DRM-free or BepInEx-modded) -- identified by steam_appid.txt alone.
 # Catches DRM-free games published on Steam (e.g. Among Us) that ship no steam_api*.dll.
 # When steam_api*.dll is also present a higher-scoring signature wins instead.
