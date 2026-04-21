@@ -36,6 +36,8 @@ pub enum CrackType {
     Scene,
     GOGRip,
     SteamRip,
+    SmokeAPI,
+    Unsteam,
     Unknown,
 }
 
@@ -68,6 +70,8 @@ impl std::fmt::Display for CrackType {
             Self::Scene => write!(f, "Scene"),
             Self::GOGRip => write!(f, "GOG Rip"),
             Self::SteamRip => write!(f, "Steam Rip"),
+            Self::SmokeAPI => write!(f, "SmokeAPI"),
+            Self::Unsteam => write!(f, "Unsteam"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }

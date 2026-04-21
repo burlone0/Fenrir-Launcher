@@ -32,6 +32,11 @@ const IGNORED_DIRS: &[&str] = &[
 /// Max parent levels to walk up from an exe looking for a signature marker.
 const ROOT_WALKUP_MAX: usize = 4;
 
+/// Platform-binary subdir names that are never a real game root.
+/// When resolve_game_root lands here via a marker, promote up to the nearest
+/// non-boring ancestor still within scan_root.
+const BORING_BIN_DIRS: &[&str] = &["Win32", "Win64", "x64", "x86", "Binaries", "bin"];
+
 /// File names / globs that mark a "real" game root. Presence of any of these
 /// in a directory strongly suggests that dir is the game's install root,
 /// regardless of where the exe lives.
@@ -180,11 +185,13 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
 
 /// Walk up from `start` (bounded by `scan_root` and `ROOT_WALKUP_MAX`) to find
 /// the nearest directory containing a signature marker. Falls back to `start`.
+/// When the marker is found inside a known platform-binary subdir (Win32, Win64,
+/// Binaries, …), promotes further up to the real game root.
 fn resolve_game_root(start: &Path, scan_root: &Path) -> PathBuf {
     let mut current = start.to_path_buf();
     for _ in 0..=ROOT_WALKUP_MAX {
         if has_root_marker(&current) {
-            return current;
+            return promote_out_of_bin_dir(current, scan_root);
         }
         match current.parent() {
             Some(p) if p.starts_with(scan_root) && p != scan_root => current = p.to_path_buf(),
@@ -192,6 +199,27 @@ fn resolve_game_root(start: &Path, scan_root: &Path) -> PathBuf {
         }
     }
     start.to_path_buf()
+}
+
+/// If `path` is a known platform-binary subdir (Win32, Win64, Binaries, …),
+/// walk up until we reach a non-boring ancestor within `scan_root`.
+fn promote_out_of_bin_dir(mut path: PathBuf, scan_root: &Path) -> PathBuf {
+    loop {
+        let boring = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|name| BORING_BIN_DIRS.iter().any(|d| name.eq_ignore_ascii_case(d)));
+        if !boring {
+            break;
+        }
+        match path.parent() {
+            Some(p) if p.starts_with(scan_root) && p != scan_root => {
+                path = p.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    path
 }
 
 fn has_root_marker(dir: &Path) -> bool {
@@ -460,6 +488,48 @@ mod tests {
         assert_eq!(
             candidates[0].path, parent,
             "game root must be the folder containing the AstralGames URL"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // promote_out_of_bin_dir: marker in Win32/Win64/Binaries → promote to real root
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_promote_out_of_win32_to_game_root() {
+        // Mimics Goat Simulator: exe + steam_api.dll both in Binaries/Win32/.
+        // resolve_game_root finds the marker in Win32 → promote_out_of_bin_dir walks
+        // up through Win32 and Binaries until it reaches the real game root.
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("Goat Simulator");
+        let bin_dir = game_dir.join("Binaries").join("Win32");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("GoatGame.exe"), "fake").unwrap();
+        fs::write(bin_dir.join("steam_api.dll"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].path, game_dir,
+            "exe+marker in Binaries/Win32 must be promoted to the real game root"
+        );
+    }
+
+    #[test]
+    fn test_promote_out_of_win64_to_game_root() {
+        // Marker + exe in Binaries/Win64/ — must promote to parent.
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("MyUEGame");
+        let bin_dir = game_dir.join("Binaries").join("Win64");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("MyUEGame.exe"), "fake").unwrap();
+        fs::write(bin_dir.join("steam_api64.dll"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].path, game_dir,
+            "exe+marker in Binaries/Win64 must be promoted to the real game root"
         );
     }
 
