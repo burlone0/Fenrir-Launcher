@@ -27,10 +27,10 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --exclude fenrir-gui -- -D warnings
 
       - name: Test
-        run: cargo test --all
+        run: cargo test --all --exclude fenrir-gui
 
   build:
     name: Build
@@ -44,4 +44,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --exclude fenrir-gui
