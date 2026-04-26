@@ -48,9 +48,9 @@ export default function GameDetail({
   const [configStep, setConfigStep] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const canConfigure = game.status === "Detected" || game.status === "Configured";
-  const canLaunch = game.status === "Ready";
-  const needsClean = game.status === "Configured";
+  const canConfigure = game.status === "Detected";
+  const canLaunch = game.status === "Configured" || game.status === "Ready";
+  const needsClean = game.status === "Configured" || game.status === "Ready";
   const busy = isConfiguring || isLaunching;
 
   const handleConfigure = async (clean: boolean) => {

@@ -45,15 +45,16 @@ export default function GameCard({
     ? "Configuring…"
     : isLaunching
     ? "Running…"
-    : game.status === "Detected" || game.status === "Configured"
+    : game.status === "Detected"
     ? "Configure"
-    : game.status === "Ready"
+    : game.status === "Configured" || game.status === "Ready"
     ? "Launch"
     : null;
 
-  const actionColor = isLaunching || game.status === "Ready"
-    ? "bg-green-700 text-white"
-    : "bg-sky-700 text-white";
+  const actionColor =
+    isLaunching || game.status === "Configured" || game.status === "Ready"
+      ? "bg-green-700 text-white"
+      : "bg-sky-700 text-white";
 
   return (
     <div

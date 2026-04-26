@@ -101,7 +101,14 @@ export default function Library() {
               configuringId={configuringId}
               launchingId={launchingId}
               onSelect={selectGame}
-              onConfigure={(id) => handleConfigure(id, false)}
+              onConfigure={(id) => {
+                const g = games.find((x) => x.id === id);
+                if (g?.status === "Configured" || g?.status === "Ready") {
+                  handleLaunch(id);
+                } else {
+                  handleConfigure(id, false);
+                }
+              }}
               onLaunch={handleLaunch}
             />
           )}
