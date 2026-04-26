@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "fenrir-gui",
-        "width": 800,
-        "height": 600
+        "title": "Fenrir Launcher",
+        "width": 1200,
+        "height": 750,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {

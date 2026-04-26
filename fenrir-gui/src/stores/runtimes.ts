@@ -3,8 +3,10 @@ import type { Runtime, GitHubRelease } from "../lib/types";
 import {
   listRuntimes,
   availableRuntimes,
+  installRuntime as installRuntimeCmd,
   setDefaultRuntime,
 } from "../lib/commands";
+import { onDownloadProgress, onDownloadDone } from "../lib/events";
 
 interface RuntimesStore {
   installed: Runtime[];
@@ -42,9 +44,20 @@ export const useRuntimesStore = create<RuntimesStore>((set) => ({
     }
   },
 
-  installRuntime: async (_version) => {
-    // TODO Sprint 5: invoke install_runtime + listen download:progress/done
-    set({ isInstalling: false, downloadProgress: null });
+  installRuntime: async (version) => {
+    set({ isInstalling: true, downloadProgress: null });
+
+    const unlistenProgress = await onDownloadProgress(({ bytes_received, total_bytes }) => {
+      set({ downloadProgress: { received: bytes_received, total: total_bytes } });
+    });
+
+    const unlistenDone = await onDownloadDone(() => {
+      set({ isInstalling: false, downloadProgress: null });
+      unlistenProgress();
+      unlistenDone();
+    });
+
+    await installRuntimeCmd(version);
   },
 
   setDefault: async (id) => {

@@ -25,10 +25,13 @@ pub fn run() {
             commands::games::get_game,
             commands::games::confirm_game,
             commands::games::delete_game,
+            commands::games::configure_game,
+            commands::games::launch_game,
             commands::scan::scan_directory,
             commands::runtime::list_runtimes,
             commands::runtime::available_runtimes,
             commands::runtime::set_default_runtime,
+            commands::runtime::install_runtime,
             commands::config::get_config,
             commands::config::set_config,
         ])

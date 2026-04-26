@@ -1,6 +1,17 @@
 import { create } from "zustand";
 import type { Game, ClassifiedGame } from "../lib/types";
-import { listGames, confirmGame as confirmGameCmd, deleteGame as deleteGameCmd } from "../lib/commands";
+import {
+  listGames,
+  configureGame as configureGameCmd,
+  launchGame as launchGameCmd,
+  deleteGame as deleteGameCmd,
+} from "../lib/commands";
+import {
+  onConfigureStep,
+  onConfigureDone,
+  onLaunchStarted,
+  onLaunchEnded,
+} from "../lib/events";
 
 interface GamesStore {
   games: Game[];
@@ -35,12 +46,32 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
 
   selectGame: (id) => set({ selectedId: id }),
 
-  configureGame: async (_id, _clean) => {
-    // TODO Sprint 5: invoke configure_game + listen configure:done
+  configureGame: async (id, clean) => {
+    // Listen for configure events, then invoke the command
+    const unlistenStep = await onConfigureStep((_step) => {
+      // step updates are shown via configure:step events — UI can listen separately
+    });
+    const unlistenDone = await onConfigureDone((game) => {
+      get().updateGame(game);
+      unlistenStep();
+      unlistenDone();
+    });
+    await configureGameCmd(id, clean);
   },
 
-  launchGame: async (_id) => {
-    // TODO Sprint 5: invoke launch_game + listen launch:ended
+  launchGame: async (id) => {
+    const unlistenEnded = await onLaunchEnded(({ game_id, play_time_secs }) => {
+      set((s) => ({
+        games: s.games.map((g) =>
+          g.id === game_id
+            ? { ...g, play_time: g.play_time + play_time_secs, last_played: new Date().toISOString() }
+            : g
+        ),
+      }));
+      unlistenEnded();
+    });
+    await onLaunchStarted(() => {});
+    await launchGameCmd(id);
   },
 
   deleteGame: async (id) => {
@@ -58,5 +89,3 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
   updateGame: (game) =>
     set((s) => ({ games: s.games.map((g) => (g.id === game.id ? game : g)) })),
 }));
-
-export { confirmGameCmd };
