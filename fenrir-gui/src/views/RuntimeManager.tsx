@@ -69,9 +69,13 @@ export default function RuntimeManager() {
       <section>
         <h2 className="font-semibold mb-4">Installed runtimes</h2>
         {installed.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            No runtimes installed. Install GE-Proton or Wine-GE below.
-          </p>
+          <div className="flex flex-col gap-2 py-2">
+            <p className="text-sm text-zinc-500">No runtimes installed.</p>
+            <p className="text-xs text-zinc-600">
+              Use <strong className="text-zinc-400">Fetch releases</strong> below to download GE-Proton or Wine-GE.
+              At least one runtime is required to configure and launch games.
+            </p>
+          </div>
         ) : (
           <table className="w-full text-left">
             <thead>

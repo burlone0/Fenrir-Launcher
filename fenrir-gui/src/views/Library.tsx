@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGamesStore } from "../stores/games";
 import { useUIStore } from "../stores/ui";
 import GameGrid from "../components/GameGrid";
@@ -35,6 +35,25 @@ export default function Library() {
 
   const selectedGame = games.find((g) => g.id === selectedId) ?? null;
 
+  // Keyboard shortcuts: Ctrl+S → scan, Enter → launch/configure selected game
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "s") {
+        e.preventDefault();
+        openScan();
+      }
+      if (e.key === "Enter" && selectedGame && !configuringId && !launchingId) {
+        if (selectedGame.status === "Configured" || selectedGame.status === "Ready") {
+          handleLaunch(selectedGame.id);
+        } else if (selectedGame.status === "Detected") {
+          handleConfigure(selectedGame.id, false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const handleConfigure = async (id: string, clean: boolean) => {
     try {
       await configureGame(id, clean);
@@ -62,7 +81,6 @@ export default function Library() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-6 py-3 border-b border-zinc-800 shrink-0">
@@ -84,6 +102,7 @@ export default function Library() {
 
           <button
             onClick={openScan}
+            title="Scan for games (Ctrl+S)"
             className="text-xs px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-white ml-2 shrink-0"
           >
             Scan
@@ -128,7 +147,6 @@ export default function Library() {
         />
       )}
 
-      {/* Scan overlay */}
       {isScanOpen && <ScanView />}
     </div>
   );

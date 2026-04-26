@@ -14,9 +14,12 @@ interface Props {
 export default function GameGrid({ games, selectedId, configuringId, launchingId, onSelect, onConfigure, onLaunch }: Props) {
   if (games.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-500">
-        <span className="text-4xl">🎮</span>
-        <p className="text-sm">No games found. Run Scan to detect games.</p>
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-500 select-none">
+        <span className="text-5xl opacity-30">🎮</span>
+        <p className="text-sm">No games found.</p>
+        <p className="text-xs text-zinc-600">
+          Press <kbd className="bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-400">Ctrl+S</kbd> or click <strong className="text-zinc-400">Scan</strong> to detect games.
+        </p>
       </div>
     );
   }
