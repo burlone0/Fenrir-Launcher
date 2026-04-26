@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { Runtime, GitHubRelease } from "../lib/types";
-import { MOCK_RUNTIMES } from "../lib/mock";
+import {
+  listRuntimes,
+  availableRuntimes,
+  setDefaultRuntime,
+} from "../lib/commands";
 
 interface RuntimesStore {
   installed: Runtime[];
@@ -21,13 +25,21 @@ export const useRuntimesStore = create<RuntimesStore>((set) => ({
   downloadProgress: null,
 
   loadInstalled: async () => {
-    // TODO Sprint 4: replace with listRuntimes()
-    set({ installed: MOCK_RUNTIMES });
+    try {
+      const installed = await listRuntimes();
+      set({ installed });
+    } catch {
+      set({ installed: [] });
+    }
   },
 
-  fetchAvailable: async (_kind) => {
-    // TODO Sprint 4: replace with availableRuntimes(kind)
-    set({ available: [] });
+  fetchAvailable: async (kind) => {
+    try {
+      const available = await availableRuntimes(kind);
+      set({ available });
+    } catch (e) {
+      console.error("fetchAvailable failed:", e);
+    }
   },
 
   installRuntime: async (_version) => {
@@ -36,12 +48,9 @@ export const useRuntimesStore = create<RuntimesStore>((set) => ({
   },
 
   setDefault: async (id) => {
-    // TODO Sprint 4: invoke setDefaultRuntime(id)
+    await setDefaultRuntime(id);
     set((s) => ({
-      installed: s.installed.map((r) => ({
-        ...r,
-        is_default: r.id === id,
-      })),
+      installed: s.installed.map((r) => ({ ...r, is_default: r.id === id })),
     }));
   },
 }));

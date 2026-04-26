@@ -12,8 +12,10 @@ export const launchGame = (id: string) => invoke<void>("launch_game", { id });
 export const deleteGame = (id: string) => invoke<void>("delete_game", { id });
 
 // --- Scan ---
+// Sprint 4: returns ScanDonePayload directly (no events yet)
+// Sprint 5: will return void and emit scan:progress/scan:done events
 export const scanDirectory = (path?: string) =>
-  invoke<void>("scan_directory", { path: path ?? null });
+  invoke<unknown>("scan_directory", { path: path ?? null });
 
 // --- Runtimes ---
 export const listRuntimes = () => invoke<Runtime[]>("list_runtimes");

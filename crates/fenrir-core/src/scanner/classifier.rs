@@ -1,6 +1,7 @@
 use crate::library::game::{CrackType, StoreOrigin};
 use crate::scanner::detector::GameCandidate;
 use crate::scanner::signatures::Signature;
+use serde::Serialize;
 use std::path::Path;
 use tracing::debug;
 
@@ -10,7 +11,7 @@ const SCORE_BOOST: u32 = 10;
 const THRESHOLD_HIGH: u32 = 60;
 const THRESHOLD_LOW: u32 = 30;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClassifiedGame {
     pub path: std::path::PathBuf,
     pub exe_files: Vec<std::path::PathBuf>,

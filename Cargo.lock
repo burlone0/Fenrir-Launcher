@@ -1156,12 +1156,16 @@ dependencies = [
 name = "fenrir-gui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "dirs 5.0.1",
  "fenrir-core",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "uuid",
 ]
 
 [[package]]

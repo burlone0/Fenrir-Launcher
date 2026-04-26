@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Game, ClassifiedGame } from "../lib/types";
-import { MOCK_GAMES } from "../lib/mock";
+import { listGames, confirmGame as confirmGameCmd, deleteGame as deleteGameCmd } from "../lib/commands";
 
 interface GamesStore {
   games: Game[];
@@ -26,8 +26,8 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
   loadGames: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO Sprint 4: replace with listGames()
-      set({ games: MOCK_GAMES, isLoading: false });
+      const games = await listGames();
+      set({ games, isLoading: false });
     } catch (e) {
       set({ error: String(e), isLoading: false });
     }
@@ -35,26 +35,16 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
 
   selectGame: (id) => set({ selectedId: id }),
 
-  configureGame: async (id, _clean) => {
+  configureGame: async (_id, _clean) => {
     // TODO Sprint 5: invoke configure_game + listen configure:done
-    set((s) => ({
-      games: s.games.map((g) =>
-        g.id === id ? { ...g, status: "Configured" as const } : g
-      ),
-    }));
   },
 
-  launchGame: async (id) => {
+  launchGame: async (_id) => {
     // TODO Sprint 5: invoke launch_game + listen launch:ended
-    set((s) => ({
-      games: s.games.map((g) =>
-        g.id === id ? { ...g, status: "Ready" as const } : g
-      ),
-    }));
   },
 
   deleteGame: async (id) => {
-    // TODO Sprint 4: invoke deleteGame()
+    await deleteGameCmd(id);
     set((s) => ({
       games: s.games.filter((g) => g.id !== id),
       selectedId: s.selectedId === id ? null : s.selectedId,
@@ -68,3 +58,5 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
   updateGame: (game) =>
     set((s) => ({ games: s.games.map((g) => (g.id === game.id ? game : g)) })),
 }));
+
+export { confirmGameCmd };
