@@ -6,18 +6,15 @@ import {
   launchGame as launchGameCmd,
   deleteGame as deleteGameCmd,
 } from "../lib/commands";
-import {
-  onConfigureStep,
-  onConfigureDone,
-  onLaunchStarted,
-  onLaunchEnded,
-} from "../lib/events";
+import { onConfigureDone, onLaunchEnded } from "../lib/events";
 
 interface GamesStore {
   games: Game[];
   selectedId: string | null;
   isLoading: boolean;
   error: string | null;
+  configuringId: string | null;
+  launchingId: string | null;
 
   loadGames: () => Promise<void>;
   selectGame: (id: string | null) => void;
@@ -33,6 +30,8 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
   selectedId: null,
   isLoading: false,
   error: null,
+  configuringId: null,
+  launchingId: null,
 
   loadGames: async () => {
     set({ isLoading: true, error: null });
@@ -47,31 +46,49 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
   selectGame: (id) => set({ selectedId: id }),
 
   configureGame: async (id, clean) => {
-    // Listen for configure events, then invoke the command
-    const unlistenStep = await onConfigureStep((_step) => {
-      // step updates are shown via configure:step events — UI can listen separately
-    });
-    const unlistenDone = await onConfigureDone((game) => {
-      get().updateGame(game);
-      unlistenStep();
-      unlistenDone();
-    });
-    await configureGameCmd(id, clean);
+    set({ configuringId: id });
+    let unlistenDone: (() => void) | null = null;
+    try {
+      const unlisten = await onConfigureDone((game) => {
+        get().updateGame(game);
+        unlisten();
+        set({ configuringId: null });
+      });
+      unlistenDone = unlisten;
+      await configureGameCmd(id, clean);
+    } catch (e) {
+      unlistenDone?.();
+      set({ configuringId: null });
+      throw e;
+    }
   },
 
   launchGame: async (id) => {
-    const unlistenEnded = await onLaunchEnded(({ game_id, play_time_secs }) => {
-      set((s) => ({
-        games: s.games.map((g) =>
-          g.id === game_id
-            ? { ...g, play_time: g.play_time + play_time_secs, last_played: new Date().toISOString() }
-            : g
-        ),
-      }));
-      unlistenEnded();
-    });
-    await onLaunchStarted(() => {});
-    await launchGameCmd(id);
+    set({ launchingId: id });
+    let unlistenEnded: (() => void) | null = null;
+    try {
+      const unlisten = await onLaunchEnded(({ game_id, play_time_secs }) => {
+        set((s) => ({
+          games: s.games.map((g) =>
+            g.id === game_id
+              ? {
+                  ...g,
+                  play_time: g.play_time + play_time_secs,
+                  last_played: new Date().toISOString(),
+                }
+              : g
+          ),
+          launchingId: null,
+        }));
+        unlisten();
+      });
+      unlistenEnded = unlisten;
+      await launchGameCmd(id);
+    } catch (e) {
+      unlistenEnded?.();
+      set({ launchingId: null });
+      throw e;
+    }
   },
 
   deleteGame: async (id) => {

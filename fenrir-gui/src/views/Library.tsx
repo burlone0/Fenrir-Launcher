@@ -15,8 +15,17 @@ const STATUS_FILTERS: Array<GameStatus | "All"> = [
 ];
 
 export default function Library() {
-  const { games, selectedId, isLoading, selectGame, configureGame, launchGame, deleteGame } =
-    useGamesStore();
+  const {
+    games,
+    selectedId,
+    isLoading,
+    configuringId,
+    launchingId,
+    selectGame,
+    configureGame,
+    launchGame,
+    deleteGame,
+  } = useGamesStore();
   const { isScanOpen, openScan, notify } = useUIStore();
 
   const [filter, setFilter] = useState<GameStatus | "All">("All");
@@ -26,14 +35,23 @@ export default function Library() {
 
   const selectedGame = games.find((g) => g.id === selectedId) ?? null;
 
-  const handleConfigure = async (id: string) => {
-    await configureGame(id, false);
-    notify(`Configured: ${games.find((g) => g.id === id)?.title ?? id}`, "success");
+  const handleConfigure = async (id: string, clean: boolean) => {
+    try {
+      await configureGame(id, clean);
+      notify(`Configured: ${games.find((g) => g.id === id)?.title ?? id}`, "success");
+    } catch (e) {
+      notify(String(e), "error");
+      throw e;
+    }
   };
 
   const handleLaunch = async (id: string) => {
-    await launchGame(id);
-    notify(`Launched: ${games.find((g) => g.id === id)?.title ?? id}`, "info");
+    try {
+      await launchGame(id);
+    } catch (e) {
+      notify(String(e), "error");
+      throw e;
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -50,16 +68,13 @@ export default function Library() {
         <div className="flex items-center gap-2 px-6 py-3 border-b border-zinc-800 shrink-0">
           <span className="text-zinc-500 text-xs">{games.length} games</span>
 
-          {/* Status filters */}
           <div className="flex gap-1 ml-auto">
             {STATUS_FILTERS.map((s) => (
               <button
                 key={s}
                 onClick={() => setFilter(s)}
                 className={`text-xs px-2 py-1 rounded transition-colors ${
-                  filter === s
-                    ? "bg-zinc-700 text-white"
-                    : "text-zinc-500 hover:text-zinc-200"
+                  filter === s ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-200"
                 }`}
               >
                 {s}
@@ -83,8 +98,10 @@ export default function Library() {
             <GameGrid
               games={visible}
               selectedId={selectedId}
+              configuringId={configuringId}
+              launchingId={launchingId}
               onSelect={selectGame}
-              onConfigure={handleConfigure}
+              onConfigure={(id) => handleConfigure(id, false)}
               onLaunch={handleLaunch}
             />
           )}
@@ -95,6 +112,8 @@ export default function Library() {
       {selectedGame && (
         <GameDetail
           game={selectedGame}
+          isConfiguring={configuringId === selectedGame.id}
+          isLaunching={launchingId === selectedGame.id}
           onClose={() => selectGame(null)}
           onConfigure={handleConfigure}
           onLaunch={handleLaunch}

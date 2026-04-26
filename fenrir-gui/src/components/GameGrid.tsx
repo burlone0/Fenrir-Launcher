@@ -4,12 +4,14 @@ import GameCard from "./GameCard";
 interface Props {
   games: Game[];
   selectedId: string | null;
+  configuringId: string | null;
+  launchingId: string | null;
   onSelect: (id: string | null) => void;
   onConfigure: (id: string) => void;
   onLaunch: (id: string) => void;
 }
 
-export default function GameGrid({ games, selectedId, onSelect, onConfigure, onLaunch }: Props) {
+export default function GameGrid({ games, selectedId, configuringId, launchingId, onSelect, onConfigure, onLaunch }: Props) {
   if (games.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-500">
@@ -26,6 +28,8 @@ export default function GameGrid({ games, selectedId, onSelect, onConfigure, onL
           key={g.id}
           game={g}
           selected={g.id === selectedId}
+          isConfiguring={configuringId === g.id}
+          isLaunching={launchingId === g.id}
           onSelect={() => onSelect(g.id === selectedId ? null : g.id)}
           onConfigure={() => onConfigure(g.id)}
           onLaunch={() => onLaunch(g.id)}

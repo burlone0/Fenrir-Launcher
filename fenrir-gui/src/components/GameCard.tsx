@@ -12,16 +12,28 @@ function formatPlayTime(secs: number) {
 interface Props {
   game: Game;
   selected: boolean;
+  isConfiguring: boolean;
+  isLaunching: boolean;
   onSelect: () => void;
   onConfigure: () => void;
   onLaunch: () => void;
 }
 
-export default function GameCard({ game, selected, onSelect, onConfigure, onLaunch }: Props) {
+export default function GameCard({
+  game,
+  selected,
+  isConfiguring,
+  isLaunching,
+  onSelect,
+  onConfigure,
+  onLaunch,
+}: Props) {
   const playTime = formatPlayTime(game.play_time);
+  const busy = isConfiguring || isLaunching;
 
   const handleAction = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (busy) return;
     if (game.status === "Detected" || game.status === "Configured") {
       onConfigure();
     } else if (game.status === "Ready") {
@@ -29,12 +41,19 @@ export default function GameCard({ game, selected, onSelect, onConfigure, onLaun
     }
   };
 
-  const actionLabel =
-    game.status === "Detected" || game.status === "Configured"
-      ? "Configure"
-      : game.status === "Ready"
-      ? "Launch"
-      : null;
+  const actionLabel = isConfiguring
+    ? "Configuring…"
+    : isLaunching
+    ? "Running…"
+    : game.status === "Detected" || game.status === "Configured"
+    ? "Configure"
+    : game.status === "Ready"
+    ? "Launch"
+    : null;
+
+  const actionColor = isLaunching || game.status === "Ready"
+    ? "bg-green-700 text-white"
+    : "bg-sky-700 text-white";
 
   return (
     <div
@@ -59,9 +78,7 @@ export default function GameCard({ game, selected, onSelect, onConfigure, onLaun
         )}
       </div>
 
-      {playTime && (
-        <div className="text-xs text-zinc-500">{playTime} played</div>
-      )}
+      {playTime && <div className="text-xs text-zinc-500">{playTime} played</div>}
 
       {game.status === "Broken" && (
         <div className="text-xs text-red-400">⚠ needs attention</div>
@@ -70,10 +87,9 @@ export default function GameCard({ game, selected, onSelect, onConfigure, onLaun
       {actionLabel && (
         <button
           onClick={handleAction}
-          className={`mt-auto text-xs px-3 py-1.5 rounded self-start transition-colors ${
-            actionLabel === "Launch"
-              ? "bg-green-700 hover:bg-green-600 text-white"
-              : "bg-sky-700 hover:bg-sky-600 text-white"
+          disabled={busy}
+          className={`mt-auto text-xs px-3 py-1.5 rounded self-start transition-colors ${actionColor} ${
+            busy ? "opacity-70 cursor-not-allowed animate-pulse" : "hover:brightness-110"
           }`}
         >
           {actionLabel}

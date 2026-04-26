@@ -16,7 +16,9 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-zinc-500 uppercase text-[10px] tracking-wider">{label}</span>
-      <span className={`text-zinc-200 break-all leading-snug ${mono ? "font-mono text-[10px]" : "text-xs"}`}>
+      <span
+        className={`text-zinc-200 break-all leading-snug ${mono ? "font-mono text-[10px]" : "text-xs"}`}
+      >
         {value || "—"}
       </span>
     </div>
@@ -25,18 +27,52 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 interface Props {
   game: Game;
+  isConfiguring: boolean;
+  isLaunching: boolean;
   onClose: () => void;
-  onConfigure: (id: string, clean: boolean) => void;
-  onLaunch: (id: string) => void;
+  onConfigure: (id: string, clean: boolean) => Promise<void>;
+  onLaunch: (id: string) => Promise<void>;
   onDelete: (id: string) => void;
 }
 
-export default function GameDetail({ game, onClose, onConfigure, onLaunch, onDelete }: Props) {
+export default function GameDetail({
+  game,
+  isConfiguring,
+  isLaunching,
+  onClose,
+  onConfigure,
+  onLaunch,
+  onDelete,
+}: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [configStep, setConfigStep] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const canConfigure = game.status === "Detected" || game.status === "Configured";
   const canLaunch = game.status === "Ready";
   const needsClean = game.status === "Configured";
+  const busy = isConfiguring || isLaunching;
+
+  const handleConfigure = async (clean: boolean) => {
+    setActionError(null);
+    setConfigStep("Starting…");
+    try {
+      await onConfigure(game.id, clean);
+      setConfigStep(null);
+    } catch (e) {
+      setConfigStep(null);
+      setActionError(String(e));
+    }
+  };
+
+  const handleLaunch = async () => {
+    setActionError(null);
+    try {
+      await onLaunch(game.id);
+    } catch (e) {
+      setActionError(String(e));
+    }
+  };
 
   return (
     <>
@@ -44,13 +80,15 @@ export default function GameDetail({ game, onClose, onConfigure, onLaunch, onDel
         {/* Header */}
         <div className="flex items-start justify-between p-5 pb-3 border-b border-zinc-800">
           <h2 className="font-bold text-sm leading-tight pr-2">{game.title}</h2>
-          <button
-            onClick={onClose}
-            className="text-zinc-500 hover:text-white shrink-0 text-xs"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          {!isLaunching && (
+            <button
+              onClick={onClose}
+              className="text-zinc-500 hover:text-white shrink-0 text-xs"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Badges */}
@@ -63,6 +101,27 @@ export default function GameDetail({ game, onClose, onConfigure, onLaunch, onDel
             </span>
           )}
         </div>
+
+        {/* In-progress indicator */}
+        {isConfiguring && (
+          <div className="px-5 pt-3 pb-1">
+            <div className="text-xs text-sky-400 animate-pulse">
+              {configStep ?? "Configuring…"}
+            </div>
+            <div className="mt-1.5 h-1 bg-zinc-700 rounded-full overflow-hidden">
+              <div className="h-full bg-sky-500 rounded-full animate-pulse w-3/4" />
+            </div>
+          </div>
+        )}
+
+        {isLaunching && (
+          <div className="px-5 pt-3 pb-1">
+            <div className="text-xs text-green-400 animate-pulse">Game running…</div>
+            <div className="mt-1.5 h-1 bg-zinc-700 rounded-full overflow-hidden">
+              <div className="h-full bg-green-500 rounded-full animate-pulse w-full" />
+            </div>
+          </div>
+        )}
 
         {/* Fields */}
         <div className="flex flex-col gap-3 p-5">
@@ -77,10 +136,15 @@ export default function GameDetail({ game, onClose, onConfigure, onLaunch, onDel
           <Field label="Added" value={game.added_at.slice(0, 10)} />
         </div>
 
-        {/* Error state */}
+        {/* Error states */}
         {game.status === "Broken" && (
           <div className="px-5 pb-3">
             <ErrorBanner message="Game is broken — reconfigure or verify install dir." />
+          </div>
+        )}
+        {actionError && (
+          <div className="px-5 pb-3">
+            <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
           </div>
         )}
 
@@ -88,41 +152,61 @@ export default function GameDetail({ game, onClose, onConfigure, onLaunch, onDel
         <div className="mt-auto flex flex-col gap-2 p-5 pt-3 border-t border-zinc-800">
           {canLaunch && (
             <button
-              onClick={() => onLaunch(game.id)}
-              className="text-xs px-3 py-2 rounded bg-green-700 hover:bg-green-600 text-white w-full"
+              onClick={handleLaunch}
+              disabled={busy}
+              className={`text-xs px-3 py-2 rounded text-white w-full transition-colors ${
+                isLaunching
+                  ? "bg-green-800 cursor-not-allowed opacity-70"
+                  : busy
+                  ? "bg-green-900 cursor-not-allowed opacity-50"
+                  : "bg-green-700 hover:bg-green-600"
+              }`}
             >
-              Launch
+              {isLaunching ? "Game running…" : "Launch"}
             </button>
           )}
+
           {canConfigure && (
             <button
-              onClick={() => onConfigure(game.id, false)}
-              className="text-xs px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 text-white w-full"
+              onClick={() => handleConfigure(false)}
+              disabled={busy}
+              className={`text-xs px-3 py-2 rounded text-white w-full transition-colors ${
+                isConfiguring
+                  ? "bg-sky-900 cursor-not-allowed opacity-70"
+                  : busy
+                  ? "bg-sky-900 cursor-not-allowed opacity-50"
+                  : "bg-sky-700 hover:bg-sky-600"
+              }`}
             >
-              Configure
+              {isConfiguring ? "Configuring…" : "Configure"}
             </button>
           )}
-          {needsClean && (
+
+          {needsClean && !isConfiguring && !isLaunching && (
             <button
-              onClick={() => onConfigure(game.id, true)}
-              className="text-xs px-3 py-2 rounded border border-zinc-600 text-zinc-300 hover:bg-zinc-800 w-full"
+              onClick={() => handleConfigure(true)}
+              disabled={busy}
+              className="text-xs px-3 py-2 rounded border border-zinc-600 text-zinc-300 hover:bg-zinc-800 w-full disabled:opacity-40"
             >
               Configure + Clean
             </button>
           )}
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-xs px-3 py-2 rounded border border-red-900 text-red-400 hover:bg-red-950 w-full"
-          >
-            Delete
-          </button>
+
+          {!busy && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-xs px-3 py-2 rounded border border-red-900 text-red-400 hover:bg-red-950 w-full"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </aside>
 
       {confirmDelete && (
         <ConfirmDialog
           title="Delete game"
-          message={`Remove "${game.title}" from the library? The game files won't be deleted.`}
+          message={`Remove "${game.title}" from the library? Game files won't be deleted.`}
           confirmLabel="Delete"
           destructive
           onConfirm={() => {
