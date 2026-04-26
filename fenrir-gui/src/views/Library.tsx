@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useGamesStore } from "../stores/games";
 import { useUIStore } from "../stores/ui";
 import type { Game } from "../lib/types";
@@ -163,10 +164,7 @@ export default function Library() {
   const { openScan, isScanOpen } = useUIStore();
 
   const statusFilter = ["All", "Detected", "Configured", "Ready", "Broken"];
-  const [filter, setFilter] = [
-    "All",
-    (_: string) => {},
-  ] as unknown as [string, (v: string) => void];
+  const [filter, setFilter] = useState("All");
 
   const visible =
     filter === "All" ? games : games.filter((g) => g.status === filter);
