@@ -177,7 +177,7 @@ pub async fn configure_game(
     updated_game.prefix_path = prefix_path;
     updated_game.runtime_id = Some(runtime.id.clone());
     let _ = clean;
-    updated_game.status = GameStatus::Configured;
+    updated_game.status = GameStatus::Ready;
 
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
