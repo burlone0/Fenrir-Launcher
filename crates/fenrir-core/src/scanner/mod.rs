@@ -2,13 +2,15 @@ pub mod classifier;
 pub mod detector;
 pub mod signatures;
 
+pub use classifier::ClassifiedGame;
+
 use crate::error::ScannerError;
-use classifier::ClassifiedGame;
+use serde::Serialize;
 use signatures::Signature;
 use std::path::Path;
 use tracing::info;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanResult {
     pub high_confidence: Vec<ClassifiedGame>,
     pub needs_confirmation: Vec<ClassifiedGame>,

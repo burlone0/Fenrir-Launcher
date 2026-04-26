@@ -1,17 +1,17 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 const PROTON_GE_REPO: &str = "GloriousEggroll/proton-ge-custom";
 const WINE_GE_REPO: &str = "GloriousEggroll/wine-ge-custom";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubRelease {
     pub tag_name: String,
     pub name: String,
     pub assets: Vec<GitHubAsset>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubAsset {
     pub name: String,
     pub browser_download_url: String,

@@ -1,0 +1,43 @@
+import type { Game } from "../lib/types";
+import GameCard from "./GameCard";
+
+interface Props {
+  games: Game[];
+  selectedId: string | null;
+  configuringId: string | null;
+  launchingId: string | null;
+  onSelect: (id: string | null) => void;
+  onConfigure: (id: string) => void;
+  onLaunch: (id: string) => void;
+}
+
+export default function GameGrid({ games, selectedId, configuringId, launchingId, onSelect, onConfigure, onLaunch }: Props) {
+  if (games.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-500 select-none">
+        <span className="text-5xl opacity-30">🎮</span>
+        <p className="text-sm">No games found.</p>
+        <p className="text-xs text-zinc-600">
+          Press <kbd className="bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-400">Ctrl+S</kbd> or click <strong className="text-zinc-400">Scan</strong> to detect games.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+      {games.map((g) => (
+        <GameCard
+          key={g.id}
+          game={g}
+          selected={g.id === selectedId}
+          isConfiguring={configuringId === g.id}
+          isLaunching={launchingId === g.id}
+          onSelect={() => onSelect(g.id === selectedId ? null : g.id)}
+          onConfigure={() => onConfigure(g.id)}
+          onLaunch={() => onLaunch(g.id)}
+        />
+      ))}
+    </div>
+  );
+}
