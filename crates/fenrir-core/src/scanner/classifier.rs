@@ -234,6 +234,30 @@ fn file_exists_in_dir(dir: &Path, pattern: &str) -> bool {
         }
     }
 
+    // Unreal Engine deep scan: crack files are placed in <GameName>/Binaries/Win64/.
+    // Check every direct subdirectory's Binaries/Win64 for the pattern.
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let sub = entry.path();
+            if !sub.is_dir() {
+                continue;
+            }
+            let bin_dir = sub.join("Binaries").join("Win64");
+            if bin_dir.join(pattern).exists() {
+                return true;
+            }
+            if let Ok(bin_entries) = std::fs::read_dir(&bin_dir) {
+                for be in bin_entries.flatten() {
+                    if let Some(name) = be.file_name().to_str() {
+                        if name.eq_ignore_ascii_case(pattern) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     false
 }
 
@@ -725,9 +749,43 @@ mod tests {
     }
 
     #[test]
+    fn test_unreal_deep_scan_finds_onlinefix_in_binaries_win64() {
+        // Anomaly Company layout: crack files placed in <GameName>/Binaries/Win64/
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir
+            .path()
+            .join("AnomalyCompany")
+            .join("Binaries")
+            .join("Win64");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("OnlineFix.ini"), "fake").unwrap();
+        fs::write(dir.path().join("AnomalyCompany.exe"), "fake").unwrap();
+
+        let sig = Signature {
+            name: "OnlineFix".to_string(),
+            store: Some("Steam".to_string()),
+            crack_type: Some("OnlineFix".to_string()),
+            required_files: vec!["OnlineFix.ini".to_string()],
+            optional_files: vec![],
+            confidence_boost: vec![],
+            auto_add_threshold: None,
+            cleanup_files: vec![],
+        };
+        let candidate = GameCandidate {
+            path: dir.path().to_path_buf(),
+            exe_files: vec![dir.path().join("AnomalyCompany.exe")],
+        };
+        let result = classify_candidate(&candidate, &[sig]);
+        assert!(
+            result.is_some(),
+            "OnlineFix.ini in <GameName>/Binaries/Win64/ must be detected"
+        );
+    }
+
+    #[test]
     fn test_unity_deep_scan_not_triggered_for_non_steam_api_files() {
         let dir = tempfile::tempdir().unwrap();
-        // Put OnlineFix.ini only in a deep subdirectory — should NOT be found
+        // Put OnlineFix.ini only in Plugins/x86_64 — NOT found (wrong deep-scan path)
         let subdir = dir.path().join("SomeData").join("Plugins").join("x86_64");
         fs::create_dir_all(&subdir).unwrap();
         fs::write(subdir.join("OnlineFix.ini"), "fake").unwrap();

@@ -115,6 +115,23 @@ pub fn find_steam_install_dir() -> Option<PathBuf> {
     candidates.into_iter().flatten().find(|p| p.exists())
 }
 
+/// Returns the SteamLinuxRuntime sniper container directory, if installed.
+/// Wrapping Proton invocations with `<sniper>/run --` provides the containerized
+/// Steam IPC environment required for overlay invite-join callbacks to reach
+/// the game process. Without sniper, raw Proton runs in the user's Linux
+/// environment and misses the IPC bridge Steam uses for lobby invite routing.
+pub fn find_steam_linux_runtime_sniper() -> Option<PathBuf> {
+    let candidates = [
+        dirs::home_dir().map(|h| h.join(".steam/steam/steamapps/common/SteamLinuxRuntime_sniper")),
+        dirs::data_dir().map(|d| d.join("Steam/steamapps/common/SteamLinuxRuntime_sniper")),
+        dirs::home_dir().map(|h| h.join(".steam/root/steamapps/common/SteamLinuxRuntime_sniper")),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|p| p.join("run").exists())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
