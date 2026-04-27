@@ -16,10 +16,19 @@ description = "Profile for OnlineFix cracked games"
 [wine]
 windows_version = "win10"
 
-# OnlineFix ships its own steamclient DLLs (both 32-bit and 64-bit) in
-# addition to the usual steam_api replacements. All four must be set to
-# native so Wine uses the crack's versions.
-dll_overrides = ["steam_api=n", "steam_api64=n", "steamclient=n", "steamclient64=n"]
+# OnlineFix ships multiple native DLLs that must override Wine's builtins:
+# - steam_api / steam_api64 / steamclient / steamclient64: Steam API emulation
+# - OnlineFix64 / SteamOverlay64: core OnlineFix multiplayer and overlay hooks
+# - winmm / winhttp: native-first so OnlineFix can intercept them for relay
+# - dnet: DirectNet used by some titles for peer-to-peer session data
+# The "n,b" suffix means "native first, fall back to builtin" — safer than pure
+# "n" because Wine keeps working if the native DLL is missing for this title.
+dll_overrides = [
+    "steam_api=n,b", "steam_api64=n,b",
+    "steamclient=n,b", "steamclient64=n,b",
+    "OnlineFix64=n,b", "SteamOverlay64=n,b",
+    "winmm=n,b", "dnet=n", "winhttp=n,b",
+]
 
 [env]
 # OnlineFix sometimes hits OpenSSL issues on certain CPU instruction sets.
