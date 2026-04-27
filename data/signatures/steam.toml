@@ -99,10 +99,13 @@ optional_files = ["cd1/", "cd2/", "disc1/"]
 # Goldberg Steam Emulator -- identified by the steam_settings/ directory.
 # Goldberg replaces the Steam API with a LAN/offline emulator; the directory
 # contains account name, app ID, DLC lists, and local save config.
+# auto_add_threshold = 30: steam_settings/ is a Goldberg-specific directory and
+# unlikely to appear outside genuine Goldberg-emu cracks.
 [goldberg]
 name = "Goldberg Steam Emu"
 store = "Steam"
 crack_type = "OnlineFix"
+auto_add_threshold = 30
 required_files = ["steam_settings/"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["steam_settings/account_name.txt", "local_save.txt"]

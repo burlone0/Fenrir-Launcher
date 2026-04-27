@@ -363,8 +363,22 @@ pub fn clean_title(name: &str) -> String {
     let re_ver = regex_lite::Regex::new(r"[.\s-]*v?\d+\.\d+(\.\d+)*\s*$").unwrap();
     title = re_ver.replace(&title, "").to_string();
 
-    // Dots to spaces
-    title = title.replace('.', " ");
+    // Underscores and dots to spaces (torrent-style names like "cult_of_the_lamb")
+    title = title.replace(['_', '.'], " ");
+
+    // Strip trailing platform/store suffixes left over from torrent names
+    // (e.g. "cult of the lamb windows gog" → "cult of the lamb"). Loops to strip
+    // multiple in sequence. Requires whitespace before to avoid clipping real titles
+    // that happen to end with these words (rare but possible).
+    let re_platform =
+        regex_lite::Regex::new(r"(?i)\s+(windows|linux|macos|mac|gog|steam|epic)\s*$").unwrap();
+    loop {
+        let stripped = re_platform.replace(&title, "").to_string();
+        if stripped == title {
+            break;
+        }
+        title = stripped;
+    }
 
     title.trim().to_string()
 }
@@ -500,6 +514,26 @@ mod tests {
     #[test]
     fn test_clean_title_brackets() {
         assert_eq!(clean_title("Elden Ring [FitGirl Repack]"), "Elden Ring");
+    }
+
+    #[test]
+    fn test_clean_title_underscores_and_platform_suffix() {
+        // gog-games.to torrent style: lowercase, underscored, with platform/store/id suffix
+        assert_eq!(
+            clean_title("cult_of_the_lamb_windows_gog_(90323)"),
+            "cult of the lamb"
+        );
+    }
+
+    #[test]
+    fn test_clean_title_preserves_uppercase() {
+        // Must not lowercase or title-case existing names
+        assert_eq!(clean_title("SIDE EFFECTS"), "SIDE EFFECTS");
+    }
+
+    #[test]
+    fn test_clean_title_strips_trailing_steam() {
+        assert_eq!(clean_title("Half Life 2 Steam"), "Half Life 2");
     }
 
     #[test]
