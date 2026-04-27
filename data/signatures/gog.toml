@@ -8,15 +8,18 @@
 # =============================================================================
 
 # GOG game identified by the per-game metadata .info file.
-# GOG installers write goggame-<appid>.info to the install directory.
-# This is the most reliable GOG indicator across all install methods.
+# GOG installers write goggame-<appid>.info to the install directory, paired with
+# a goggame-<appid>.hashdb for integrity checks. commonappdata/ and __redist/
+# are dropped by the offline installer in the install root.
+# auto_add_threshold = 30: goggame-*.info alone is a sufficiently specific marker.
 [gog_info]
 name = "GOG"
 store = "GOG"
 crack_type = "GOGRip"
+auto_add_threshold = 30
 required_files = ["goggame-*.info"]
-optional_files = ["goglog/", "gog.ico"]
-confidence_boost = ["gameinfo", "support/"]
+optional_files = ["goggame-*.hashdb"]
+confidence_boost = ["commonappdata/", "__redist/", "support/", "gog.ico"]
 
 # GOG Galaxy client -- identified by GalaxyClient.dll.
 # Present when the game was installed through the GOG Galaxy launcher.

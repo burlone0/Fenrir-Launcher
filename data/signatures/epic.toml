@@ -10,12 +10,16 @@
 # Epic Games Store title -- identified by EOSSDK-Win64-Shipping.dll.
 # All EGS games bundle the Epic Online Services SDK. ScreamAPI replaces it
 # as a DLC/entitlement unlocker and ships the same filename.
+# auto_add_threshold = 30: EOSSDK-Win64-Shipping.dll is Epic-specific and rarely
+# appears outside genuine Epic games. Engine/ and Manifest_UFSFiles_Win64.txt are
+# Unreal Engine markers that boost confidence for the common UE-on-Epic case.
 [epic_emu]
 name = "Epic Emu"
 store = "Epic"
+auto_add_threshold = 30
 required_files = ["EOSSDK-Win64-Shipping.dll"]
 optional_files = ["EOSSDK-Win32-Shipping.dll"]
-confidence_boost = ["ScreamAPI.dll", "ScreamAPI64.dll"]
+confidence_boost = ["ScreamAPI.dll", "ScreamAPI64.dll", "Engine/", "Manifest_UFSFiles_Win64.txt"]
 
 # Epic Games launcher shortcut -- identifies games installed via EGS launcher
 # by the presence of an EpicGamesLauncher.lnk shortcut in the game directory.
