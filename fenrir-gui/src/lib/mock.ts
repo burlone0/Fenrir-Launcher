@@ -82,7 +82,7 @@ export const MOCK_GAMES: Game[] = [
     executable: "game.exe",
     install_dir: "/mnt/games/BrokenGame",
     store_origin: "GOG",
-    crack_type: "GOG Rip",
+    crack_type: "GOGRip",
     prefix_path: "/home/user/.local/share/fenrir/prefixes/66666666",
     runtime_id: null,
     status: "Broken",
