@@ -21,8 +21,8 @@ export type CrackType =
   | "DODI"
   | "FitGirl"
   | "Scene"
-  | "GOG Rip"
-  | "Steam Rip"
+  | "GOGRip"
+  | "SteamRip"
   | "SmokeAPI"
   | "Unsteam"
   | "Unknown";
