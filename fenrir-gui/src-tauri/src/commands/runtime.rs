@@ -7,10 +7,11 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
-pub async fn list_runtimes(_state: State<'_, AppState>) -> Result<Vec<Runtime>, String> {
-    let runtime_dir = dirs::data_dir()
-        .map(|d| d.join("fenrir/runtimes"))
-        .unwrap_or_default();
+pub async fn list_runtimes(state: State<'_, AppState>) -> Result<Vec<Runtime>, String> {
+    let runtime_dir = {
+        let config = state.config.lock().map_err(|e| e.to_string())?;
+        config.general.runtime_dir.clone()
+    };
     Ok(discovery::discover_all(&runtime_dir))
 }
 
@@ -41,15 +42,19 @@ struct DownloadDonePayload {
 }
 
 #[tauri::command]
-pub async fn install_runtime(app: AppHandle, version: String) -> Result<(), String> {
+pub async fn install_runtime(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    version: String,
+) -> Result<(), String> {
     let client = reqwest::Client::new();
 
-    // Find the release matching version (check both proton-ge and wine-ge)
     let release = find_release(&client, &version).await?;
 
-    let runtime_dir = dirs::data_dir()
-        .map(|d| d.join("fenrir/runtimes"))
-        .unwrap_or_default();
+    let runtime_dir = {
+        let config = state.config.lock().map_err(|e| e.to_string())?;
+        config.general.runtime_dir.clone()
+    };
     tokio::fs::create_dir_all(&runtime_dir)
         .await
         .map_err(|e| e.to_string())?;
@@ -72,16 +77,21 @@ pub async fn install_runtime(app: AppHandle, version: String) -> Result<(), Stri
         }
     });
 
-    let progress = Box::new(move |received: u64, total: u64| {
-        let _ = tx.send((received, total));
+    let progress = Box::new({
+        let tx = tx.clone();
+        move |received: u64, total: u64| {
+            let _ = tx.send((received, total));
+        }
     });
 
-    download_runtime(&client, &release, &runtime_dir, Some(progress))
-        .await
-        .map_err(|e| e.to_string())?;
+    let download_result = download_runtime(&client, &release, &runtime_dir, Some(progress)).await;
 
-    // Drop tx so events_task drains and exits
-    events_task.await.ok();
+    // Drop our sender + the original tx so events_task drains and exits even if
+    // download_runtime stored its own clone of the callback somewhere.
+    drop(tx);
+    let _ = events_task.await;
+
+    download_result.map_err(|e| e.to_string())?;
 
     let _ = app.emit(
         "download:done",
@@ -94,24 +104,39 @@ pub async fn install_runtime(app: AppHandle, version: String) -> Result<(), Stri
 }
 
 async fn find_release(client: &reqwest::Client, version: &str) -> Result<GitHubRelease, String> {
-    let proton = github::list_proton_ge_releases(client, 30).await;
-    if let Ok(releases) = proton {
-        if let Some(r) = releases.into_iter().find(|r| r.tag_name == version) {
-            return Ok(r);
+    let mut errors: Vec<String> = Vec::new();
+
+    match github::list_proton_ge_releases(client, 30).await {
+        Ok(releases) => {
+            if let Some(r) = releases.into_iter().find(|r| r.tag_name == version) {
+                return Ok(r);
+            }
         }
+        Err(e) => errors.push(format!("proton-ge: {e}")),
     }
-    let wine = github::list_wine_ge_releases(client, 30).await;
-    if let Ok(releases) = wine {
-        if let Some(r) = releases.into_iter().find(|r| r.tag_name == version) {
-            return Ok(r);
+
+    match github::list_wine_ge_releases(client, 30).await {
+        Ok(releases) => {
+            if let Some(r) = releases.into_iter().find(|r| r.tag_name == version) {
+                return Ok(r);
+            }
         }
+        Err(e) => errors.push(format!("wine-ge: {e}")),
     }
-    Err(format!("release not found: {version}"))
+
+    if errors.is_empty() {
+        Err(format!("release not found: {version}"))
+    } else {
+        Err(format!(
+            "release not found: {version} ({})",
+            errors.join("; ")
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn set_default_runtime(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    let mut config = state.config.clone();
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
     config.defaults.runtime = id;
     config.save().map_err(|e| e.to_string())
 }

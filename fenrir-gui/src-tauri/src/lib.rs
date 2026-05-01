@@ -6,19 +6,41 @@ use std::sync::Mutex;
 
 pub struct AppState {
     pub db: Mutex<Database>,
-    pub config: FenrirConfig,
+    pub config: Mutex<FenrirConfig>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let config = FenrirConfig::load().expect("failed to load fenrir config");
-    let db = Database::open(&config.general.library_db).expect("failed to open database");
+    let config = FenrirConfig::load().unwrap_or_else(|e| {
+        eprintln!("warning: failed to load config ({e}), using defaults");
+        FenrirConfig::default()
+    });
+
+    if let Some(parent) = config.general.library_db.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            eprintln!(
+                "warning: failed to create library db parent dir {}: {e}",
+                parent.display()
+            );
+        }
+    }
+
+    let db = match Database::open(&config.general.library_db) {
+        Ok(db) => db,
+        Err(e) => {
+            eprintln!(
+                "fatal: failed to open library database at {}: {e}",
+                config.general.library_db.display()
+            );
+            std::process::exit(1);
+        }
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState {
             db: Mutex::new(db),
-            config,
+            config: Mutex::new(config),
         })
         .invoke_handler(tauri::generate_handler![
             commands::games::list_games,
