@@ -29,8 +29,9 @@ When you run `fenrir scan`, this happens:
 
 ## Signature Format
 
-Signatures are TOML files in `data/signatures/`. Each file can contain
-multiple signatures as top-level sections. Here's the anatomy:
+Signatures are TOML files in `data/signatures/`. Currently there are three:
+`steam.toml`, `gog.toml`, and `epic.toml`. Each file can contain multiple
+signatures as top-level sections. Here's the anatomy:
 
 ```toml
 [section_key]
@@ -168,8 +169,10 @@ cargo test --all
 
 ## Existing Signatures Walkthrough
 
-The file `data/signatures/steam.toml` contains five signatures. Here's the
-thinking behind each:
+Signatures are split across three files: `steam.toml` for Steam-based sources,
+`gog.toml` for GOG, and `epic.toml` for Epic Games Store.
+
+### steam.toml
 
 **steam_generic** -- The broadest catch-all. Any game with `steam_api.dll` is
 probably a Steam crack. Optional files (`steam_api64.dll`, `steam_appid.txt`)
@@ -189,3 +192,31 @@ game is a standard Steam crack underneath.
 **scene** -- Scene releases always have an `.nfo` file. They sometimes split
 across disc directories (`cd1/`, `cd2/`). No store is assumed since scene
 releases aren't tied to a specific storefront.
+
+### gog.toml
+
+**gog_info** -- The most reliable GOG signal. GOG installers write a
+`goggame-<appid>.info` file to the install directory for every game. The glob
+`goggame-*.info` catches all of them. `goglog/` and `gog.ico` are common but
+not universal, so they're optional rather than required.
+
+**gog_galaxy** -- For games installed through the GOG Galaxy launcher. Galaxy
+drops `GalaxyClient.dll` in the game directory. This is a fairly reliable
+required file -- non-GOG games don't ship it. `Galaxy64.dll` is a boost for
+extra confidence.
+
+**gog_installer** -- For games installed from GOG's offline installers. The
+installer writes a plain `game.id` file to the install root. The `start.sh`
+script and `gameinfo` file are optional helpers that GOG installs include.
+
+### epic.toml
+
+**epic_emu** -- All Epic Games Store titles bundle the Epic Online Services
+SDK as `EOSSDK-Win64-Shipping.dll`. This is a strong required file -- if it's
+there, it's almost certainly an EGS game. ScreamAPI (a DLC/entitlement
+unlocker) replaces the same DLL and ships `ScreamAPI.dll` or `ScreamAPI64.dll`
+alongside it, so those are confidence boosts.
+
+**epic_generic** -- A fallback for games launched via the EGS launcher that
+leave an `EpicGamesLauncher.lnk` shortcut in the game directory. Less specific
+than epic_emu but catches titles that don't bundle EOSSDK directly.

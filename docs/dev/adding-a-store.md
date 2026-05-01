@@ -1,59 +1,84 @@
 # Adding a New Store
 
-Fenrir currently detects games from Steam-based sources (cracks, repacks, scene
-releases). Multi-store support (GOG, Epic) is planned for Fase 4. This guide
-documents the current extension points and what a new store integration needs.
+Fenrir can detect games from Steam-based sources, GOG, and Epic Games Store.
+This guide explains how that detection is structured and what you need to add
+support for a new store.
 
-## Current State
+## What's Already There
 
-The codebase already has the scaffolding for multiple stores:
+As of v0.2.0, three store families are fully wired up:
 
-- `StoreOrigin` enum in `crates/fenrir-core/src/library/game.rs` defines
-  `Steam`, `GOG`, `Epic`, `Unknown`
-- Signatures can set `store = "GOG"` or `store = "Epic"` (the classifier
-  parses these)
-- The database stores and filters by `store_origin`
+- **Steam** -- cracks, repacks, and scene releases (`data/signatures/steam.toml`)
+- **GOG** -- GOG installer/Galaxy client/offline installs (`data/signatures/gog.toml`)
+- **Epic** -- EGS titles with EOSSDK, ScreamAPI cracked (`data/signatures/epic.toml`)
 
-What's missing is store-specific detection signatures and any store-specific
-launch behavior.
+The library model (`StoreOrigin` enum) already has `Steam`, `GOG`, `Epic`, and
+`Unknown`. Adding a new store is purely a matter of adding data -- no changes to
+the core pipeline are needed.
 
 ## What a New Store Needs
 
 ### 1. Detection signatures
 
-Every store has characteristic files. For example:
+Every store has characteristic files. Figure out what's always there, then
+write a signature in `data/signatures/`:
 
-**GOG:**
 ```toml
-[gog]
-name = "GOG"
-store = "GOG"
-required_files = ["goggame-*.info"]
-confidence_boost = ["goglog/", "gog.ico"]
+# data/signatures/mystore.toml
+
+[mystore_generic]
+name = "MyStore"
+store = "MyStore"
+crack_type = "MyStoreCrack"    # or omit if DRM-free
+required_files = ["mystore-sdk.dll"]
+optional_files = ["mystore_settings/"]
+confidence_boost = ["gameinfo.json"]
 ```
 
-**Epic (with crack):**
-```toml
-[epic_generic]
-name = "Epic Generic"
-store = "Epic"
-required_files = ["EOSSDK-Win64-Shipping.dll"]
-optional_files = ["EasyAntiCheat/"]
+See the [Signatures Guide](signatures-guide.md) for the full format reference
+and scoring rules.
+
+### 2. Extend StoreOrigin and CrackType
+
+Add the new variants to both enums in
+`crates/fenrir-core/src/library/game.rs`:
+
+```rust
+pub enum StoreOrigin {
+    Steam,
+    GOG,
+    Epic,
+    MyStore,   // add this
+    Unknown,
+}
+
+pub enum CrackType {
+    OnlineFix,
+    DODI,
+    FitGirl,
+    Scene,
+    GOGRip,
+    MyStoreCrack,  // add this
+    Unknown,
+}
 ```
 
-These go in `data/signatures/` -- either in the existing `steam.toml` (renamed
-to something more general) or in new store-specific files like `gog.toml`,
-`epic.toml`.
+The classifier in `scanner/classifier.rs` reads the `store` and `crack_type`
+fields from signatures and parses them into these enums, so the string you put
+in the TOML must match the enum variant name.
 
-### 2. Tuning profiles (if needed)
+### 3. Tuning profile (if needed)
 
-GOG games typically don't need Steam API DLL overrides. They might need their
-own profile:
+Some stores need different Wine settings. GOG games don't need Steam API DLL
+overrides; Epic games don't either. If your store has specific requirements,
+create a profile in `data/profiles/`:
 
 ```toml
+# data/profiles/mystore.toml
+
 [profile]
-name = "gog"
-description = "Profile for GOG games"
+name = "mystore"
+description = "Profile for MyStore games"
 
 [wine]
 windows_version = "win10"
@@ -68,39 +93,44 @@ esync = true
 fsync = true
 ```
 
-### 3. Profile mapping
+See the [Profiles Guide](profiles-guide.md) for the full format reference.
 
-Update the crack-type-to-profile mapping in the CLI (or move it to the core
-library) to handle the new store's games.
+### 4. Profile mapping
 
-### 4. Discovery paths (optional)
+Wire the new crack type to its profile in
+`crates/fenrir-cli/src/commands/configure.rs`:
 
-Some stores have well-known install locations. If GOG Galaxy or Heroic Launcher
-are installed, their game directories could be auto-discovered. This would go
-in the scanner module as additional scan paths.
+```rust
+fn crack_type_to_profile_name(
+    crack_type: Option<fenrir_core::library::game::CrackType>,
+) -> &'static str {
+    use fenrir_core::library::game::CrackType;
+    match crack_type {
+        Some(CrackType::OnlineFix) => "onlinefix",
+        Some(CrackType::DODI)     => "dodi",
+        Some(CrackType::FitGirl)  => "fitgirl",
+        Some(CrackType::Scene)    => "scene",
+        Some(CrackType::GOGRip)   => "gog",
+        Some(CrackType::MyStoreCrack) => "mystore",  // add this
+        _                         => "steam_generic",
+    }
+}
+```
+
+### 5. Discovery paths (optional)
+
+Some stores install to well-known locations. If the store has a launcher with
+a fixed install root, you can add it to the default scan paths in config.
+This is optional -- users can always point `fenrir scan --path` at the right
+directory.
 
 ## What Doesn't Change
 
-The core pipeline (scan -> classify -> store -> configure -> launch) doesn't
-change. A GOG game goes through the exact same flow as a Steam game. The
-differences are:
+The core pipeline (scan -> classify -> store -> configure -> launch) is
+store-agnostic. A GOG game goes through the exact same flow as a Steam crack.
+The differences are entirely in:
 - Which signatures match
 - Which profile gets applied
-- Potentially different discovery paths
+- Potentially, where to look during discovery
 
-This is by design. The architecture handles multi-store through data (signatures
-and profiles), not code branches.
-
-## Roadmap
-
-This work is tracked in the Fase 4 implementation plan. The rough sequence:
-
-1. Add GOG/Epic signatures to `data/signatures/`
-2. Add corresponding profiles to `data/profiles/`
-3. Test detection against real game directories
-4. Add store-specific discovery paths (if useful)
-5. Update the profile mapping logic
-
-Contributions are welcome -- if you have GOG or Epic games and want to help
-build detection signatures, see the [Signatures Guide](signatures-guide.md)
-and open a PR.
+This is by design. Multi-store support is a data problem, not a code problem.

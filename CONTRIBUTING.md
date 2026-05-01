@@ -36,6 +36,26 @@ cargo fmt --all --check
 All four of these must pass before your PR can be merged. CI runs them
 automatically, but catching issues locally saves everyone a round-trip.
 
+## Good First Contributions
+
+Not sure where to start? These require no Rust knowledge:
+
+- **Add a detection signature** -- if Fenrir doesn't detect a game you have,
+  add a TOML signature for it. See the
+  [Signatures Guide](docs/dev/signatures-guide.md). Open issues labeled
+  `signature-needed` have specific requests.
+
+- **Add or improve a tuning profile** -- if a game type needs specific Wine
+  configuration that the current profiles don't cover, write one. See the
+  [Profiles Guide](docs/dev/profiles-guide.md).
+
+- **Test on real games** -- run `fenrir --verbose scan` on your library and
+  report what gets misdetected or missed. This feeds directly into signature
+  improvements.
+
+Both signatures and profiles are plain TOML files. You don't need to understand
+Rust to contribute them.
+
 ## Commit Conventions
 
 We use [Conventional Commits](https://www.conventionalcommits.org/) with module
@@ -68,9 +88,6 @@ main       -- stable releases only
     fix/*  -- bug fixes
 ```
 
-The full branching model, PR process, and release flow are documented internally
-for team members.
-
 ## Pull Request Checklist
 
 Before opening a PR, make sure:
@@ -83,32 +100,16 @@ Before opening a PR, make sure:
 
 PRs require at least one review and a green CI before merge.
 
-## Extending Fenrir
-
-Fenrir is designed to be extended through TOML data files, not just code.
-Two common contribution paths:
-
-**Adding game detection signatures** -- If Fenrir doesn't detect a game type
-you care about, you can add a signature pattern. See the
-[Signatures Guide](docs/dev/signatures-guide.md) for how the detection system
-works and how to write new patterns.
-
-**Adding tuning profiles** -- If a game type needs specific Wine configuration
-(DLL overrides, environment variables, etc.), you can create a profile. See the
-[Profiles Guide](docs/dev/profiles-guide.md) for the profile format and
-examples.
-
-Both of these can be contributed without touching Rust code.
-
 ## Code Style
 
-We keep it simple:
-
-- Follow `rustfmt.toml` (edition 2021, 100 char width, 4-space tabs)
+- Follow `rustfmt.toml` (edition 2021, 100-char width, 4-space indent)
 - Follow `clippy.toml` (relaxed args threshold at 8)
 - Use `thiserror` for error types in the core library
 - Use `Box<dyn Error>` in the CLI layer
-- Write tests for new functionality
+- Write tests for new functionality -- inline `#[cfg(test)]` for unit tests,
+  `crates/fenrir-core/tests/integration_test.rs` for end-to-end cases
+- No comments explaining what code does; only add one when the why is
+  non-obvious (a hidden constraint, a workaround, a subtle invariant)
 
 ## Reporting Issues
 
@@ -117,10 +118,15 @@ Found a bug? Open an issue with:
 - What you did
 - What you expected
 - What actually happened
-- Your distro and Wine/Proton version (if relevant)
+- Your distro, kernel version, and Wine/Proton version
 
-## Internal Documentation
+If Fenrir misdetects or misses a game, include the output of:
+```bash
+fenrir --verbose scan --path /path/to/that/game/
+```
 
-Team members have access to additional internal documentation covering
-architecture decisions, implementation plans, and workflow details. Ask the team
-for access if you need it.
+## Conduct
+
+Be direct and constructive. We don't have a formal code of conduct document,
+but the basics apply: review code, not people; give specific feedback, not
+vague complaints; if you disagree with a decision, explain why.
