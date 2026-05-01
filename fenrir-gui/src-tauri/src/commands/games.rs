@@ -1,4 +1,5 @@
 use crate::AppState;
+use fenrir_core::cleanup;
 use fenrir_core::launcher::{launch, monitor_process, LaunchConfig, LaunchResult};
 use fenrir_core::library::game::{Game, GameStatus};
 use fenrir_core::prefix::{
@@ -7,6 +8,9 @@ use fenrir_core::prefix::{
 };
 use fenrir_core::runtime::discovery;
 use fenrir_core::runtime::Runtime;
+use fenrir_core::scanner::classifier::classify_candidate;
+use fenrir_core::scanner::detector::GameCandidate;
+use fenrir_core::scanner::signatures::load_signatures_from_dir;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
@@ -49,6 +53,18 @@ fn wine_binary(rt: &Runtime) -> PathBuf {
         return wine;
     }
     PathBuf::from("/usr/bin/wine")
+}
+
+fn find_data_subdir(name: &str) -> Option<PathBuf> {
+    let candidates = [
+        std::env::current_exe().ok().and_then(|p| {
+            p.parent()
+                .and_then(|d| d.join(format!("../../data/{name}")).canonicalize().ok())
+        }),
+        Some(PathBuf::from(format!("data/{name}"))),
+        dirs::data_dir().map(|d| d.join(format!("fenrir/{name}"))),
+    ];
+    candidates.into_iter().flatten().find(|p| p.exists())
 }
 
 // ── Read commands ────────────────────────────────────────────────────────────
@@ -109,31 +125,27 @@ pub async fn configure_game(
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
 
-    let (game, runtime, prefix_dir, profiles_dir) = {
+    let (game, runtime, prefix_dir) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let game = db
             .get_game(uuid)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("game not found: {id}"))?;
 
-        let runtime_dir = &state.config.general.runtime_dir;
+        let (runtime_dir, prefix_dir) = {
+            let config = state.config.lock().map_err(|e| e.to_string())?;
+            (
+                config.general.runtime_dir.clone(),
+                config.general.prefix_dir.clone(),
+            )
+        };
+
         let runtime =
-            resolve_runtime(runtime_dir, game.runtime_id.as_deref()).ok_or_else(|| {
+            resolve_runtime(&runtime_dir, game.runtime_id.as_deref()).ok_or_else(|| {
                 "no Wine/Proton runtime found. Install one from the Runtimes tab.".to_string()
             })?;
 
-        let prefix_dir = state
-            .config
-            .general
-            .library_db
-            .parent()
-            .unwrap_or(runtime_dir)
-            .join("prefixes");
-        let profiles_dir = dirs::data_dir()
-            .map(|d| d.join("fenrir/profiles"))
-            .unwrap_or(PathBuf::from("data/profiles"));
-
-        (game, runtime, prefix_dir, profiles_dir)
+        (game, runtime, prefix_dir)
     };
 
     let emit = |step: &str| {
@@ -164,21 +176,26 @@ pub async fn configure_game(
 
     emit("applying profile");
     let profile_name = crack_type_to_profile_name(game.crack_type);
-    if profiles_dir.exists() {
-        if let Ok(profiles) = load_profiles_from_dir(&profiles_dir) {
+    let profiles_dir = find_data_subdir("profiles");
+    if let Some(dir) = profiles_dir {
+        if let Ok(profiles) = load_profiles_from_dir(&dir) {
             if let Some(profile) = profiles.get(profile_name) {
                 apply_profile(&prefix_path, &wine_bin, profile, None).map_err(|e| e.to_string())?;
             }
         }
     }
 
-    emit("saving");
     let mut updated_game = game.clone();
     updated_game.prefix_path = prefix_path;
     updated_game.runtime_id = Some(runtime.id.clone());
-    let _ = clean;
     updated_game.status = GameStatus::Ready;
 
+    if clean {
+        emit("cleaning up files");
+        run_cleanup(&mut updated_game).map_err(|e| e.to_string())?;
+    }
+
+    emit("saving");
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.update_game(&updated_game).map_err(|e| e.to_string())?;
@@ -188,6 +205,55 @@ pub async fn configure_game(
         "configure:done",
         ConfigureDonePayload { game: updated_game },
     );
+
+    Ok(())
+}
+
+/// Re-classify the install dir, build a cleanup plan from the matched signature's
+/// `cleanup_files`, and execute it. Mirrors `crates/fenrir-cli/src/commands/configure.rs::run_cleanup`
+/// but without the interactive prompt — the user already opted in via the GUI checkbox.
+fn run_cleanup(game: &mut Game) -> Result<(), Box<dyn std::error::Error>> {
+    let sig_dir = match find_data_subdir("signatures") {
+        Some(d) => d,
+        None => {
+            eprintln!("warning: signatures dir not found, skipping cleanup");
+            return Ok(());
+        }
+    };
+
+    let signatures = load_signatures_from_dir(&sig_dir)?;
+    let candidate = GameCandidate {
+        path: game.install_dir.clone(),
+        exe_files: vec![],
+    };
+
+    let cleanup_files = classify_candidate(&candidate, &signatures)
+        .map(|(_, classified)| {
+            signatures
+                .iter()
+                .find(|s| s.name == classified.signature_name)
+                .map(|s| s.cleanup_files.clone())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+
+    if cleanup_files.is_empty() {
+        return Ok(());
+    }
+
+    let plan = cleanup::build_cleanup_plan(&game.install_dir, &cleanup_files);
+    if plan.is_empty() {
+        return Ok(());
+    }
+
+    let _ = cleanup::execute_cleanup(&plan);
+
+    let mut overrides = game
+        .user_overrides
+        .take()
+        .unwrap_or_else(|| serde_json::json!({}));
+    overrides["cleanup_done"] = serde_json::json!(true);
+    game.user_overrides = Some(overrides);
 
     Ok(())
 }
@@ -214,20 +280,30 @@ pub async fn launch_game(
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
 
-    let (game, runtime) = {
+    let (game, runtime, log_dir) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let game = db
             .get_game(uuid)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("game not found: {id}"))?;
 
-        let runtime = resolve_runtime(
-            &state.config.general.runtime_dir,
-            game.runtime_id.as_deref(),
-        )
-        .ok_or_else(|| "no runtime available. Install one from the Runtimes tab.".to_string())?;
+        let (runtime_dir, log_dir) = {
+            let config = state.config.lock().map_err(|e| e.to_string())?;
+            let log_dir = config
+                .general
+                .library_db
+                .parent()
+                .map(|p| p.join("logs"))
+                .unwrap_or_else(|| PathBuf::from("./logs"));
+            (config.general.runtime_dir.clone(), log_dir)
+        };
 
-        (game, runtime)
+        let runtime =
+            resolve_runtime(&runtime_dir, game.runtime_id.as_deref()).ok_or_else(|| {
+                "no runtime available. Install one from the Runtimes tab.".to_string()
+            })?;
+
+        (game, runtime, log_dir)
     };
 
     let _ = app.emit(
@@ -262,10 +338,12 @@ pub async fn launch_game(
         steam_app_id,
     };
 
-    let log_dir = dirs::data_dir()
-        .map(|d| d.join("fenrir/logs"))
-        .unwrap_or_default();
-    std::fs::create_dir_all(&log_dir).ok();
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        return Err(format!(
+            "failed to create log dir {}: {e}",
+            log_dir.display()
+        ));
+    }
     let log_path = log_dir.join(format!("{}.log", game.id));
 
     let child = launch(&config).map_err(|e| e.to_string())?;
@@ -278,7 +356,6 @@ pub async fn launch_game(
             .await
             .map_err(|e| e.to_string())?;
 
-    // Update play_time in DB
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         if let Ok(Some(mut g)) = db.get_game(uuid) {

@@ -4,7 +4,8 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<FenrirConfig, String> {
-    Ok(state.config.clone())
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    Ok(config.clone())
 }
 
 #[tauri::command]
@@ -13,7 +14,7 @@ pub async fn set_config(
     key: String,
     value: String,
 ) -> Result<(), String> {
-    let mut config = state.config.clone();
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
     match key.as_str() {
         "defaults.runtime" => config.defaults.runtime = value,
         "defaults.enable_dxvk" => {

@@ -4,6 +4,7 @@ use fenrir_core::scanner::signatures;
 use fenrir_core::scanner::{self, ClassifiedGame};
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::State;
 use uuid::Uuid;
 
@@ -22,14 +23,13 @@ pub async fn scan_directory(
     let scan_dirs: Vec<PathBuf> = match path {
         Some(p) => vec![PathBuf::from(p)],
         None => {
-            if state.config.scan.game_dirs.is_empty() {
+            let config = state.config.lock().map_err(|e| e.to_string())?;
+            if config.scan.game_dirs.is_empty() {
                 return Err("no scan directories configured and no path provided".to_string());
             }
-            state.config.scan.game_dirs.clone()
+            config.scan.game_dirs.clone()
         }
     };
-
-    let sigs = load_signatures().map_err(|e| e.to_string())?;
 
     for dir in &scan_dirs {
         if !dir.exists() || !dir.is_dir() {
@@ -37,15 +37,29 @@ pub async fn scan_directory(
         }
     }
 
+    // Load signatures off the async runtime — disk IO + TOML parse.
+    let sigs = Arc::new(
+        tokio::task::spawn_blocking(load_signatures)
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?,
+    );
+
     let mut all_high: Vec<ClassifiedGame> = Vec::new();
     let mut all_low: Vec<ClassifiedGame> = Vec::new();
     let mut total = 0;
 
-    for dir in &scan_dirs {
-        let result = scanner::scan_directory(dir, &sigs, 6).map_err(|e| e.to_string())?;
+    for dir in scan_dirs {
+        let sigs_clone = sigs.clone();
+        let result =
+            tokio::task::spawn_blocking(move || scanner::scan_directory(&dir, &sigs_clone, 6))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+
         total += result.total_candidates;
 
-        // Upsert high-confidence games into DB
+        // DB upsert: lock held briefly per directory's results.
         {
             let db = state.db.lock().map_err(|e| e.to_string())?;
             for classified in &result.high_confidence {
@@ -122,7 +136,8 @@ pub async fn scan_directory(
     })
 }
 
-fn load_signatures() -> Result<Vec<signatures::Signature>, Box<dyn std::error::Error>> {
+fn load_signatures() -> Result<Vec<signatures::Signature>, Box<dyn std::error::Error + Send + Sync>>
+{
     let candidates = [
         std::env::current_exe()
             .ok()
