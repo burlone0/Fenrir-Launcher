@@ -176,6 +176,7 @@ fn run_cleanup(
     Ok(())
 }
 
+/// Returns the launch binary for the runtime (proton script for Proton, wine for Wine).
 fn find_wine_binary(rt: &fenrir_core::runtime::Runtime) -> PathBuf {
     let proton = rt.path.join("proton");
     if proton.exists() {
