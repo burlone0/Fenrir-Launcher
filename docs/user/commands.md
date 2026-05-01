@@ -3,6 +3,26 @@
 All commands accept `--help` for quick usage info. Game arguments accept either
 a UUID or a title (fuzzy-matched).
 
+## Global Flags
+
+These flags work on every command. Pass them before the subcommand name.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--verbose` | `-v` | Enable verbose output (sets log level to debug/trace) |
+| `--quiet` | `-q` | Suppress all output except errors |
+
+```bash
+# See exactly what the scanner is doing
+fenrir --verbose scan --path /mnt/games/
+
+# Run silently, only print errors
+fenrir --quiet launch "Elden Ring"
+```
+
+`--verbose` and `--quiet` are mutually exclusive -- if you pass both, quiet
+wins. The default log level shows info-level messages from fenrir-core.
+
 ## Scanning & Discovery
 
 ### fenrir scan
@@ -84,6 +104,29 @@ The game is added with status `Detected` and store `Unknown`.
 ```bash
 fenrir add /mnt/games/SomeObscureGame/
 ```
+
+### fenrir confirm
+
+Confirm a low-confidence game and add it to the library.
+
+```
+fenrir confirm <GAME>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `GAME` | Game title or UUID |
+
+When `fenrir scan` finds a game with a confidence score between 30 and 59, it
+lists it separately as "needs confirmation" rather than adding it automatically.
+Use this command to say "yes, that's a real game, add it."
+
+```bash
+fenrir confirm "Some Obscure Game"
+```
+
+After confirmation, the game gets status `Detected` and goes through the normal
+configure-then-launch flow.
 
 ## Configuration & Setup
 
@@ -182,6 +225,53 @@ Fenrir scans these locations:
 - `~/.steam/root/compatibilitytools.d/`
 - Steam's `compatibilitytools.d` and `common/` directories
 - System Wine (`/usr/bin/wine`, `/usr/share/wine/`)
+
+### fenrir runtime available
+
+Show runtimes available to download from GitHub.
+
+```
+fenrir runtime available [--kind proton-ge|wine-ge]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--kind`, `-k` | Which runtime family to list: `proton-ge` (default) or `wine-ge` |
+
+Queries the GloriousEggroll GitHub releases API and prints recent versions with
+their download size. Useful for finding the version string to pass to
+`runtime install`.
+
+```bash
+# List recent GE-Proton releases
+fenrir runtime available
+
+# List recent Wine-GE releases
+fenrir runtime available --kind wine-ge
+```
+
+### fenrir runtime install
+
+Download and install a runtime.
+
+```
+fenrir runtime install <VERSION>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `VERSION` | Version to install, e.g. `GE-Proton9-20` |
+
+Downloads the runtime archive from GitHub, verifies the SHA-512 checksum, and
+extracts it to `~/.local/share/fenrir/runtimes/`. Shows a progress bar during
+download.
+
+```bash
+fenrir runtime install GE-Proton9-20
+```
+
+After installation, the runtime appears in `runtime list` with source
+`Downloaded` and can be set as default with `runtime set-default`.
 
 ### fenrir runtime set-default
 
