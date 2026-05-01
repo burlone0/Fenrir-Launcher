@@ -35,6 +35,9 @@ pub enum CrackType {
     FitGirl,
     Scene,
     GOGRip,
+    SteamRip,
+    SmokeAPI,
+    Unsteam,
     Unknown,
 }
 
@@ -66,6 +69,9 @@ impl std::fmt::Display for CrackType {
             Self::FitGirl => write!(f, "FitGirl"),
             Self::Scene => write!(f, "Scene"),
             Self::GOGRip => write!(f, "GOG Rip"),
+            Self::SteamRip => write!(f, "Steam Rip"),
+            Self::SmokeAPI => write!(f, "SmokeAPI"),
+            Self::Unsteam => write!(f, "Unsteam"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }
@@ -102,6 +108,7 @@ mod tests {
         assert_eq!(CrackType::FitGirl.to_string(), "FitGirl");
         assert_eq!(CrackType::Scene.to_string(), "Scene");
         assert_eq!(CrackType::GOGRip.to_string(), "GOG Rip");
+        assert_eq!(CrackType::SteamRip.to_string(), "Steam Rip");
         assert_eq!(CrackType::Unknown.to_string(), "Unknown");
     }
 

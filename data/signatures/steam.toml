@@ -57,9 +57,11 @@ confidence_boost = ["steam_emu.ini", "cream_api.ini"]
 name = "OnlineFix"
 store = "Steam"
 crack_type = "OnlineFix"
+auto_add_threshold = 30
 required_files = ["OnlineFix.ini"]
 optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
+cleanup_files = ["OnlineFix.url", "_Redist/", "setup.exe", "autorun.inf", "*.url"]
 
 # FitGirl Repack -- identified by the fitgirl-repacks.site marker file.
 # FitGirl repacks are heavily compressed; the game directory looks like
@@ -71,6 +73,7 @@ crack_type = "FitGirl"
 required_files = ["fitgirl-repacks.site"]
 optional_files = ["md5.txt"]
 confidence_boost = ["steam_api.dll"]
+cleanup_files = ["fitgirl-repacks.site.url", "_CommonRedist/", "setup.exe", "autorun.inf", "*.url"]
 
 # DODI Repack -- identified by the "DODI Repacks/" marker directory.
 # Similar to FitGirl, the installed game is a standard Steam crack
@@ -82,6 +85,7 @@ crack_type = "DODI"
 required_files = ["DODI Repacks/"]
 optional_files = ["_Redist/"]
 confidence_boost = ["steam_api.dll"]
+cleanup_files = ["_Redist/", "_CommonRedist/", "setup.exe", "autorun.inf", "*.url"]
 
 # Scene release -- identified by the presence of an .nfo file.
 # Scene releases sometimes split the game across multiple disc directories.
@@ -95,10 +99,13 @@ optional_files = ["cd1/", "cd2/", "disc1/"]
 # Goldberg Steam Emulator -- identified by the steam_settings/ directory.
 # Goldberg replaces the Steam API with a LAN/offline emulator; the directory
 # contains account name, app ID, DLC lists, and local save config.
+# auto_add_threshold = 30: steam_settings/ is a Goldberg-specific directory and
+# unlikely to appear outside genuine Goldberg-emu cracks.
 [goldberg]
 name = "Goldberg Steam Emu"
 store = "Steam"
 crack_type = "OnlineFix"
+auto_add_threshold = 30
 required_files = ["steam_settings/"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["steam_settings/account_name.txt", "local_save.txt"]
@@ -141,12 +148,88 @@ required_files = ["empress.nfo"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["empress64.dll"]
 
-# AnkerGames -- identified by AnkerGames.url, a website shortcut bundled with
-# the crack. Similar to OnlineFix, uses steam_settings/ for LAN emulation.
+# AnkerGames -- identified by an "AnkerGames*.url" shortcut bundled with every release.
+# The exact filename varies (e.g. "AnkerGames.url", "AnkerGames - Free Pre-installed PC Games.url"),
+# so a glob is required. Similar to OnlineFix, uses steam_settings/ for LAN emulation.
 [ankergames]
 name = "AnkerGames"
 store = "Steam"
 crack_type = "OnlineFix"
-required_files = ["AnkerGames.url"]
+auto_add_threshold = 30
+required_files = ["AnkerGames*.url"]
 optional_files = ["steam_api.dll", "steam_api64.dll"]
 confidence_boost = ["steam_settings/"]
+cleanup_files = ["AnkerGames*.url", "_Redist/", "_CommonRedist/", "autorun.inf", "*.url"]
+
+# unsteam -- DRM bypass that hooks the Steam API at load time via unsteam.dll/unsteam.ini.
+# Used in pre-installed releases where the game ships with no steam_api*.dll replacement.
+# Markers are often buried in Binaries/Win64/ for Unreal Engine titles.
+# auto_add_threshold = 30: unsteam.ini is sufficiently specific to auto-add.
+[unsteam]
+name = "unsteam"
+store = "Steam"
+crack_type = "Unsteam"
+auto_add_threshold = 30
+required_files = ["unsteam.ini"]
+optional_files = ["unsteam.dll", "steam_appid.txt"]
+confidence_boost = []
+
+# ColdClientLoader -- an alternative Steam API bypass by jiang0681 that loads a custom
+# steamclient64.dll via a dedicated loader. Identified by ColdClientLoader.ini, which
+# is always present and contains the loader configuration. Different from unsteam (@emberantz).
+[cold_client_loader]
+name = "ColdClientLoader"
+store = "Steam"
+crack_type = "Unsteam"
+auto_add_threshold = 30
+required_files = ["ColdClientLoader.ini"]
+optional_files = ["steamclient_loader.exe", "steamclient64.dll", "steamclient.dll"]
+confidence_boost = []
+
+# SteamRIP release -- identified by the "STEAMRIP » Free Pre-installed Steam Games.url"
+# shortcut bundled with every release. The » character is U+00BB.
+# auto_add_threshold = 30: the URL file alone is a sufficiently specific identifier.
+[steamrip]
+name = "SteamRIP"
+store = "Steam"
+crack_type = "SteamRIP"
+auto_add_threshold = 30
+required_files = ["STEAMRIP » Free Pre-installed Steam Games.url"]
+optional_files = ["Read_Me_Instructions.txt", "steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+
+# AstralGames release -- identified by "AstralGames ~ Pre-Installed Games.url", a website
+# shortcut bundled with every release. AstralGames distributes pre-installed Steam games
+# similarly to SteamRIP; the marker file is sufficiently specific to auto-add.
+[astral_games]
+name = "AstralGames"
+store = "Steam"
+crack_type = "OnlineFix"
+auto_add_threshold = 30
+required_files = ["AstralGames ~ Pre-Installed Games.url"]
+optional_files = ["steam_api.dll", "steam_api64.dll", "steam_appid.txt"]
+confidence_boost = []
+
+# SmokeAPI -- a DLC unlocker that patches steam_api(64).dll in-place. Identified by
+# SmokeAPI.config.json, which is always present next to the patched DLL. On Unreal Engine
+# games the file lives in Binaries/Win64/ or Binaries/Win32/ (covered by UE deep scan).
+# auto_add_threshold = 30: SmokeAPI.config.json alone is sufficiently specific to auto-add.
+[smokeapi]
+name = "SmokeAPI"
+store = "Steam"
+crack_type = "SmokeAPI"
+auto_add_threshold = 30
+required_files = ["SmokeAPI.config.json"]
+optional_files = ["SmokeAPI.log", "steam_api.dll", "steam_api64.dll"]
+confidence_boost = []
+
+# Steam pre-installed (DRM-free or BepInEx-modded) -- identified by steam_appid.txt alone.
+# Catches DRM-free games published on Steam (e.g. Among Us) that ship no steam_api*.dll.
+# When steam_api*.dll is also present a higher-scoring signature wins instead.
+# No auto_add_threshold: steam_appid.txt alone is low-specificity, needs manual confirmation.
+[steam_appid_only]
+name = "Steam Pre-installed"
+store = "Steam"
+required_files = ["steam_appid.txt"]
+optional_files = ["steam_api.dll", "steam_api64.dll"]
+confidence_boost = []

@@ -2,13 +2,15 @@ pub mod classifier;
 pub mod detector;
 pub mod signatures;
 
+pub use classifier::ClassifiedGame;
+
 use crate::error::ScannerError;
-use classifier::{high_confidence_threshold, ClassifiedGame};
+use serde::Serialize;
 use signatures::Signature;
 use std::path::Path;
 use tracing::info;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanResult {
     pub high_confidence: Vec<ClassifiedGame>,
     pub needs_confirmation: Vec<ClassifiedGame>,
@@ -37,7 +39,7 @@ pub fn scan_directory(
 
     for candidate in &candidates {
         if let Some((score, classified)) = classifier::classify_candidate(candidate, signatures) {
-            if score >= high_confidence_threshold() {
+            if score >= classified.high_confidence_threshold {
                 high_confidence.push(classified);
             } else {
                 needs_confirmation.push(classified);

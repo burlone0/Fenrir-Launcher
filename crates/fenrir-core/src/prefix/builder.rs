@@ -160,6 +160,37 @@ mod tests {
         assert!(!env.contains_key("WINEFSYNC"));
     }
 
+    #[test]
+    fn test_set_dll_overrides_empty_is_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        // Empty override list must return Ok without calling wine at all
+        let result = set_dll_overrides(dir.path(), Path::new("/nonexistent/wine"), &[]);
+        assert!(
+            result.is_ok(),
+            "empty dll_overrides must succeed without invoking wine"
+        );
+    }
+
+    #[test]
+    fn test_set_dll_overrides_generates_reg_and_calls_wine() {
+        // Use /usr/bin/true as a fake wine that always exits 0.
+        // This lets us exercise the reg content generation, file write, command
+        // execution, and cleanup paths without needing a real Wine installation.
+        let dir = tempfile::tempdir().unwrap();
+        let overrides = vec![
+            "steam_api=n".to_string(),
+            "dinput8=native,builtin".to_string(),
+        ];
+        let result = set_dll_overrides(dir.path(), Path::new("/usr/bin/true"), &overrides);
+        assert!(
+            result.is_ok(),
+            "expected Ok with /usr/bin/true as wine: {:?}",
+            result
+        );
+        // The temp .reg file must be cleaned up after the call
+        assert!(!dir.path().join("dll_overrides.reg").exists());
+    }
+
     // create_prefix with is_proton=true should fall back to the wine_binary itself
     // when files/bin/wine does not exist (non-existent proton dir path used here).
     #[test]

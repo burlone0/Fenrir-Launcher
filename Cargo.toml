@@ -2,6 +2,7 @@
 members = [
     "crates/fenrir-core",
     "crates/fenrir-cli",
+    "fenrir-gui/src-tauri",
 ]
 resolver = "2"
 

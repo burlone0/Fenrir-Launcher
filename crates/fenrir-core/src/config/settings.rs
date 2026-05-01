@@ -151,4 +151,40 @@ mod tests {
         config.save_to(&path).unwrap();
         assert!(path.exists());
     }
+
+    #[test]
+    fn test_save_to_creates_nested_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a").join("b").join("config.toml");
+        let config = FenrirConfig::default();
+        config.save_to(&path).unwrap();
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn test_load_from_invalid_toml_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "this is not valid toml =[[[").unwrap();
+        let result = FenrirConfig::load_from(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_path_is_nonempty() {
+        let path = FenrirConfig::config_path();
+        assert!(!path.as_os_str().is_empty());
+        assert!(path.to_string_lossy().contains("fenrir"));
+    }
+
+    #[test]
+    fn test_default_config_values() {
+        let config = FenrirConfig::default();
+        assert!(config.defaults.enable_dxvk);
+        assert_eq!(config.defaults.runtime, "auto");
+        assert!(!config.privacy.fetch_metadata);
+        assert!(!config.privacy.fetch_covers);
+        assert!(config.scan.game_dirs.is_empty());
+        assert!(!config.scan.auto_scan);
+    }
 }

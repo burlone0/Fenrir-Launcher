@@ -55,6 +55,12 @@ enum Commands {
     Configure {
         /// Game title or UUID
         query: String,
+        /// Remove known installer noise from the game directory (shows preview first)
+        #[arg(long)]
+        clean: bool,
+        /// Skip confirmation prompt for --clean (for scripting)
+        #[arg(long)]
+        yes: bool,
     },
     /// Launch a configured game
     Launch {
@@ -101,7 +107,11 @@ fn main() {
         Commands::Add { path } => commands::add::run(&path),
         Commands::Config { set, value } => commands::config_cmd::run(set, value),
         Commands::Confirm { ref query } => commands::confirm::run(query),
-        Commands::Configure { ref query } => commands::configure::run(query),
+        Commands::Configure {
+            ref query,
+            clean,
+            yes,
+        } => commands::configure::run(query, clean, yes),
         Commands::Launch { ref query } => commands::launch::run(query),
         Commands::Runtime { ref action } => match action {
             RuntimeAction::List => commands::runtime::list(),

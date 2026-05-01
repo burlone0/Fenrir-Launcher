@@ -26,16 +26,20 @@ pub struct PreparedCommand {
 /// Returns None if neither is found or readable.
 pub fn read_steam_app_id(install_dir: &std::path::Path) -> Option<String> {
     // OnlineFix.ini takes priority: FakeAppId is the Spacewar ID used for Steam IPC
-    let onlinefix_ini = install_dir.join("OnlineFix.ini");
-    if onlinefix_ini.exists() {
-        if let Ok(content) = std::fs::read_to_string(&onlinefix_ini) {
-            for line in content.lines() {
-                if let Some(value) = line.trim().strip_prefix("FakeAppId=") {
-                    let v = value.trim().to_string();
-                    if !v.is_empty() {
-                        return Some(v);
-                    }
-                }
+    if let Some(v) = read_fake_app_id_from_ini(&install_dir.join("OnlineFix.ini")) {
+        return Some(v);
+    }
+
+    // Unreal Engine layout: <install_dir>/<game>/Binaries/Win64/OnlineFix.ini
+    if let Ok(entries) = std::fs::read_dir(install_dir) {
+        for entry in entries.flatten() {
+            let sub = entry.path();
+            if !sub.is_dir() {
+                continue;
+            }
+            let ini = sub.join("Binaries").join("Win64").join("OnlineFix.ini");
+            if let Some(v) = read_fake_app_id_from_ini(&ini) {
+                return Some(v);
             }
         }
     }
@@ -54,13 +58,30 @@ pub fn read_steam_app_id(install_dir: &std::path::Path) -> Option<String> {
     None
 }
 
+fn read_fake_app_id_from_ini(path: &std::path::Path) -> Option<String> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    for line in content.lines() {
+        if let Some(value) = line.trim().strip_prefix("FakeAppId=") {
+            let v = value.trim().to_string();
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
 /// Builds the LD_PRELOAD value for Steam overlay injection.
-/// Looks for gameoverlayrenderer.so in ubuntu12_64/ and ubuntu12_32/ under steam_path.
+/// Looks for gameoverlayrenderer.so in ubuntu12_32/ and ubuntu12_64/ under steam_path.
+/// Order matches Valve's own launch scripts: 32-bit first, then 64-bit.
 /// Appends to existing LD_PRELOAD value (colon-separated). Returns None if no .so found.
 pub fn build_overlay_ld_preload(steam_path: &std::path::Path, existing: &str) -> Option<String> {
     let candidates = [
-        steam_path.join("ubuntu12_64/gameoverlayrenderer.so"),
         steam_path.join("ubuntu12_32/gameoverlayrenderer.so"),
+        steam_path.join("ubuntu12_64/gameoverlayrenderer.so"),
     ];
     let paths: Vec<String> = candidates
         .iter()
@@ -89,10 +110,21 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
         .unwrap_or_else(|| std::path::Path::new("."))
         .to_path_buf();
 
-    // Steam AppID env vars — both Wine and Proton need these for IPC connection
+    // Steam AppID env vars — both Wine and Proton need these for IPC connection.
+    // SteamOverlayGameId is the specific variable gameoverlayrenderer.so uses to
+    // register the game process for invite/lobby-join callback routing; without
+    // it the overlay renders but "accept invite" clicks are never delivered to
+    // the process. ENABLE_VK_LAYER_VALVE_steam_overlay_1 activates the Valve
+    // Vulkan overlay layer for DXVK/VKD3D-rendered games (Unreal, Unity, etc.)
+    // — the GL/DX-only hooks in gameoverlayrenderer.so don't intercept Vulkan.
     if let Some(ref app_id) = config.steam_app_id {
         env.insert("SteamGameId".to_string(), app_id.clone());
         env.insert("SteamAppId".to_string(), app_id.clone());
+        env.insert("SteamOverlayGameId".to_string(), app_id.clone());
+        env.insert(
+            "ENABLE_VK_LAYER_VALVE_steam_overlay_1".to_string(),
+            "1".to_string(),
+        );
     }
 
     let steam_install_dir = crate::runtime::discovery::find_steam_install_dir();
@@ -131,14 +163,40 @@ pub fn build_launch_command(config: &LaunchConfig) -> PreparedCommand {
             env.insert("STEAM_COMPAT_APP_ID".to_string(), app_id.clone());
         }
 
-        PreparedCommand {
-            program: config.wine_binary.to_string_lossy().to_string(),
-            args: vec![
-                "run".to_string(),
-                config.executable.to_string_lossy().to_string(),
-            ],
-            env,
-            working_dir,
+        // For Steam-integrated games (steam_app_id set), wrap the Proton
+        // invocation in SteamLinuxRuntime_sniper when available. The sniper
+        // container provides the Steam IPC environment required for overlay
+        // invite-join callbacks to reach the game process. Without it, raw
+        // Proton runs outside the container and lobby-join requests are
+        // silently dropped even though the overlay itself renders.
+        let sniper = if config.steam_app_id.is_some() {
+            crate::runtime::discovery::find_steam_linux_runtime_sniper()
+        } else {
+            None
+        };
+
+        if let Some(sniper_dir) = sniper {
+            PreparedCommand {
+                program: sniper_dir.join("run").to_string_lossy().to_string(),
+                args: vec![
+                    "--".to_string(),
+                    config.wine_binary.to_string_lossy().to_string(),
+                    "run".to_string(),
+                    config.executable.to_string_lossy().to_string(),
+                ],
+                env,
+                working_dir,
+            }
+        } else {
+            PreparedCommand {
+                program: config.wine_binary.to_string_lossy().to_string(),
+                args: vec![
+                    "run".to_string(),
+                    config.executable.to_string_lossy().to_string(),
+                ],
+                env,
+                working_dir,
+            }
         }
     } else {
         env.insert(
@@ -266,6 +324,35 @@ mod tests {
     }
 
     #[test]
+    fn test_read_steam_app_id_unreal_deep_scan() {
+        // Unreal layout: <install_dir>/<game>/Binaries/Win64/OnlineFix.ini
+        let dir = tempfile::tempdir().unwrap();
+        let ini_path = dir
+            .path()
+            .join("AnomalyCompany")
+            .join("Binaries")
+            .join("Win64");
+        std::fs::create_dir_all(&ini_path).unwrap();
+        std::fs::write(
+            ini_path.join("OnlineFix.ini"),
+            "[Main]\nRealAppId=3643170\nFakeAppId=480\n",
+        )
+        .unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), Some("480".to_string()));
+    }
+
+    #[test]
+    fn test_read_steam_app_id_root_wins_over_unreal_deep() {
+        // Root-level OnlineFix.ini must take priority over Unreal deep path
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("OnlineFix.ini"), "[Main]\nFakeAppId=999\n").unwrap();
+        let ini_path = dir.path().join("GameDir").join("Binaries").join("Win64");
+        std::fs::create_dir_all(&ini_path).unwrap();
+        std::fs::write(ini_path.join("OnlineFix.ini"), "[Main]\nFakeAppId=480\n").unwrap();
+        assert_eq!(read_steam_app_id(dir.path()), Some("999".to_string()));
+    }
+
+    #[test]
     fn test_build_command_steam_vars_wine() {
         let cmd = build_launch_command(&LaunchConfig {
             executable: PathBuf::from("/games/test/game.exe"),
@@ -278,6 +365,13 @@ mod tests {
         });
         assert_eq!(cmd.env.get("SteamGameId").unwrap(), "480");
         assert_eq!(cmd.env.get("SteamAppId").unwrap(), "480");
+        assert_eq!(cmd.env.get("SteamOverlayGameId").unwrap(), "480");
+        assert_eq!(
+            cmd.env
+                .get("ENABLE_VK_LAYER_VALVE_steam_overlay_1")
+                .unwrap(),
+            "1"
+        );
         // STEAM_COMPAT_APP_ID must NOT be set for Wine
         assert!(!cmd.env.contains_key("STEAM_COMPAT_APP_ID"));
     }
@@ -295,6 +389,13 @@ mod tests {
         });
         assert_eq!(cmd.env.get("SteamGameId").unwrap(), "480");
         assert_eq!(cmd.env.get("SteamAppId").unwrap(), "480");
+        assert_eq!(cmd.env.get("SteamOverlayGameId").unwrap(), "480");
+        assert_eq!(
+            cmd.env
+                .get("ENABLE_VK_LAYER_VALVE_steam_overlay_1")
+                .unwrap(),
+            "1"
+        );
         assert_eq!(cmd.env.get("STEAM_COMPAT_APP_ID").unwrap(), "480");
         assert!(cmd.env.contains_key("STEAM_COMPAT_CLIENT_INSTALL_PATH"));
     }
@@ -312,6 +413,10 @@ mod tests {
         });
         assert!(!cmd.env.contains_key("SteamGameId"));
         assert!(!cmd.env.contains_key("SteamAppId"));
+        assert!(!cmd.env.contains_key("SteamOverlayGameId"));
+        assert!(!cmd
+            .env
+            .contains_key("ENABLE_VK_LAYER_VALVE_steam_overlay_1"));
     }
 
     #[test]
@@ -331,7 +436,10 @@ mod tests {
         assert!(val.contains("ubuntu12_32/gameoverlayrenderer.so"));
         let idx64 = val.find("ubuntu12_64").unwrap();
         let idx32 = val.find("ubuntu12_32").unwrap();
-        assert!(idx64 < idx32, "64-bit overlay must precede 32-bit");
+        assert!(
+            idx32 < idx64,
+            "32-bit overlay must precede 64-bit (Valve convention)"
+        );
     }
 
     #[test]

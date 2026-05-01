@@ -13,6 +13,10 @@ pub struct Signature {
     pub optional_files: Vec<String>,
     #[serde(default)]
     pub confidence_boost: Vec<String>,
+    #[serde(default)]
+    pub auto_add_threshold: Option<u32>,
+    #[serde(default)]
+    pub cleanup_files: Vec<String>,
 }
 
 pub fn parse_signatures_from_str(content: &str) -> Result<Vec<Signature>, ScannerError> {
@@ -92,10 +96,10 @@ confidence_boost = []
         let sig_dir =
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data/signatures");
         let sigs = load_signatures_from_dir(&sig_dir).unwrap();
-        // steam (6 original + 6 new) + gog (3) + epic (2) = at least 14
+        // steam (original + smokeapi + coldclientloader + others) + gog + epic = at least 16
         assert!(
-            sigs.len() >= 14,
-            "expected at least 14 signatures, got {}",
+            sigs.len() >= 16,
+            "expected at least 16 signatures, got {}",
             sigs.len()
         );
         // Every signature must declare at least one required file to be useful
@@ -137,5 +141,35 @@ confidence_boost = ["steam_settings/"]
             sig.optional_files.contains(&"OnlineFix64.dll".to_string()),
             "OnlineFix64.dll should be optional"
         );
+    }
+
+    #[test]
+    fn test_auto_add_threshold_parsed_from_toml() {
+        let toml = r#"
+[onlinefix]
+name = "OnlineFix"
+store = "Steam"
+crack_type = "OnlineFix"
+auto_add_threshold = 30
+required_files = ["OnlineFix.ini"]
+optional_files = []
+confidence_boost = []
+"#;
+        let sigs = parse_signatures_from_str(toml).unwrap();
+        let sig = sigs.iter().find(|s| s.name == "OnlineFix").unwrap();
+        assert_eq!(sig.auto_add_threshold, Some(30));
+    }
+
+    #[test]
+    fn test_auto_add_threshold_defaults_to_none() {
+        let toml = r#"
+[generic]
+name = "Generic"
+store = "Steam"
+required_files = ["steam_api.dll"]
+"#;
+        let sigs = parse_signatures_from_str(toml).unwrap();
+        let sig = sigs.iter().find(|s| s.name == "Generic").unwrap();
+        assert_eq!(sig.auto_add_threshold, None);
     }
 }

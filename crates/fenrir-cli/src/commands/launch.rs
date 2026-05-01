@@ -58,13 +58,26 @@ pub fn run(query: &str) -> Result<(), Box<dyn std::error::Error>> {
         config.defaults.fsync,
     );
 
-    // 2. Profile env vars
+    // 2. Profile env vars + WINEDLLOVERRIDES
     if let Some(dir) = find_profiles_dir() {
         let profile_name = fenrir_core::prefix::crack_type_to_profile_name(game.crack_type);
         if let Ok(profiles) = load_profiles_from_dir(&dir) {
             if let Some(profile) = profiles.get(profile_name) {
                 for (k, v) in &profile.env {
                     env.insert(k.clone(), v.clone());
+                }
+                // Set WINEDLLOVERRIDES as env var so overrides are enforced at
+                // process level regardless of registry state in the prefix.
+                // Registry-only overrides are ignored by some Wine builds when
+                // specific DLLs (e.g. OnlineFix64) are absent from the prefix.
+                if !profile.wine.dll_overrides.is_empty() {
+                    let overrides = profile.wine.dll_overrides.join(";");
+                    env.entry("WINEDLLOVERRIDES".to_string())
+                        .and_modify(|v| {
+                            v.push(';');
+                            v.push_str(&overrides);
+                        })
+                        .or_insert(overrides);
                 }
             }
         }

@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.3.0] - 2026-04-26
+
+Fase 3 complete. Native desktop GUI built with Tauri v2 + React + TypeScript.
+
+### Added
+
+- **GUI — Tauri v2 frontend** in `fenrir-gui/` — React 18, TypeScript, Vite, Tailwind CSS v3, Zustand.
+- **Library view** — game grid with status/store/crack-type badges, detail panel, filter by status.
+- **ScanView** — three-phase overlay: path input → progress bar → results with confirm buttons.
+- **RuntimeManager** — installed runtimes table, GE-Proton/Wine-GE fetch and install with progress.
+- **Tauri commands** — `list_games`, `get_game`, `confirm_game`, `delete_game`, `configure_game`,
+  `launch_game`, `scan_directory`, `list_runtimes`, `available_runtimes`, `install_runtime`,
+  `set_default_runtime`, `get_config`, `set_config`.
+- **Event system** — `configure:step/done`, `launch:started/ended`, `download:progress/done`.
+- **Keyboard shortcuts** — `Ctrl+S` opens scan, `Enter` launches or configures selected game.
+- **New crack types** — `CrackType::SmokeAPI`, `CrackType::Unsteam` with DB round-trip support.
+- **New signatures** — SmokeAPI, unsteam (with crack_type), ColdClientLoader.
+- **Scanner fixes** — UE deep scan (markers in Binaries/Win64), `promote_out_of_bin_dir`,
+  AnkerGames glob, `max_depth` 4→6, SteamRIP dirname fallback.
+
 ## [0.2.0] - 2026-04-16
 
 Fase 2 complete. Runtime download management, expanded game detection
