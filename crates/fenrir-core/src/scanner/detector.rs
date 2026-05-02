@@ -274,10 +274,28 @@ fn is_installer_only(candidate: &GameCandidate) -> bool {
 fn is_ignored_entry(entry: &walkdir::DirEntry) -> bool {
     if entry.file_type().is_dir() {
         if let Some(name) = entry.file_name().to_str() {
-            return IGNORED_DIRS.iter().any(|&d| name.eq_ignore_ascii_case(d));
+            if IGNORED_DIRS.iter().any(|&d| name.eq_ignore_ascii_case(d)) {
+                return true;
+            }
+            // Skip version-numbered directories (e.g. "14.40", "1.0.2", "v2.3.1").
+            // Real game roots never have names that look like bare version strings.
+            if looks_like_version(name) {
+                debug!("skipping version-dir: {}", entry.path().display());
+                return true;
+            }
         }
     }
     false
+}
+
+/// Returns true if `name` looks like a bare version string: optional leading
+/// 'v', then digits-and-dots only, with at least one dot, no leading/trailing dot.
+fn looks_like_version(name: &str) -> bool {
+    let s = name.strip_prefix('v').unwrap_or(name);
+    s.contains('.')
+        && !s.starts_with('.')
+        && !s.ends_with('.')
+        && s.chars().all(|c| c.is_ascii_digit() || c == '.')
 }
 
 #[cfg(test)]
@@ -531,6 +549,35 @@ mod tests {
             candidates[0].path, game_dir,
             "exe+marker in Binaries/Win64 must be promoted to the real game root"
         );
+    }
+
+    #[test]
+    fn test_version_dir_is_skipped() {
+        // Simulates Fortnite Versions/14.40 — a version-numbered subdir must be ignored.
+        let dir = tempfile::tempdir().unwrap();
+        let versions = dir.path().join("Fortnite Versions");
+        let ver_dir = versions.join("14.40");
+        fs::create_dir_all(&ver_dir).unwrap();
+        fs::write(ver_dir.join("FortniteClient-Win64-Shipping.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert!(
+            candidates.is_empty(),
+            "version-numbered dirs like '14.40' must be skipped"
+        );
+    }
+
+    #[test]
+    fn test_looks_like_version() {
+        assert!(looks_like_version("14.40"));
+        assert!(looks_like_version("1.0.2"));
+        assert!(looks_like_version("v2.3.1"));
+        assert!(looks_like_version("1.0.0.1"));
+        assert!(!looks_like_version("GameName"));
+        assert!(!looks_like_version("v2"));
+        assert!(!looks_like_version("Game1.0"));
+        assert!(!looks_like_version(".hidden"));
+        assert!(!looks_like_version("1."));
     }
 
     #[test]
