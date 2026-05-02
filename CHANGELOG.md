@@ -8,6 +8,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.3.1] - 2026-05-03
+
+Patch release — backend hardening for the v0.3.0 GUI based on a post-release
+code review. No frontend or feature changes; behaviour-only fixes.
+
+### Fixed
+
+- **GUI startup no longer panics** on a fresh install — corrupt config falls
+  back to defaults with a warning, and `library.db`'s parent directory is
+  created automatically.
+- **`Configure → Clean files` checkbox now works.** The flag was previously
+  discarded; it now invokes the same cleanup pipeline as the CLI's
+  `configure --clean`, removing repack residue (`*.url`, `_Redist/`, etc.)
+  and recording `cleanup_done` in `user_overrides`.
+- **`set_config` and `set_default_runtime` update in-memory state**, so a
+  follow-up `get_config` returns the new value instead of the stale one
+  cached at app start.
+- **Scanner walker runs off the Tauri async runtime** via
+  `tokio::task::spawn_blocking`, so a long scan no longer freezes
+  `list_games` / `get_game` and other commands.
+- **Configured paths are honored consistently**: `prefix_dir` now comes from
+  `config.general.prefix_dir` instead of being derived from
+  `library_db.parent()`; `runtime_dir` is read from config in `list_runtimes`
+  and `install_runtime`; the launch log directory respects the user's data
+  dir customisation.
+- **Network errors during runtime install** are surfaced rather than masked
+  as "release not found" when both proton-ge and wine-ge fetches fail.
+- **Progress channel teardown in `install_runtime`** explicitly drops the
+  sender before awaiting the events task, removing a latent deadlock if
+  `download_runtime` ever held a clone of the callback past return.
+
+### Documentation
+
+- `fenrir-gui/README.md` replaced the default Tauri template with
+  Fenrir-specific dev setup instructions, including `tauri:x11` /
+  `tauri:x11:wk` fallbacks for Wayland/WebKit issues on NVIDIA and certain
+  KDE/Sway configurations.
+
 ## [0.3.0] - 2026-04-26
 
 Fase 3 complete. Native desktop GUI built with Tauri v2 + React + TypeScript.
