@@ -176,6 +176,95 @@ fn run_cleanup(
     Ok(())
 }
 
+fn run_cleanup(
+    game: &mut fenrir_core::library::game::Game,
+    db: &Database,
+    yes: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Re-classify the install dir to get the winning signature's cleanup_files
+    let sig_dir = match find_signatures_dir() {
+        Some(d) => d,
+        None => {
+            eprintln!("warning: signatures directory not found, skipping cleanup");
+            return Ok(());
+        }
+    };
+
+    let signatures = load_signatures_from_dir(&sig_dir)?;
+    let candidate = GameCandidate {
+        path: game.install_dir.clone(),
+        exe_files: vec![],
+    };
+
+    let cleanup_files = classify_candidate(&candidate, &signatures)
+        .map(|(_, classified)| {
+            signatures
+                .iter()
+                .find(|s| s.name == classified.signature_name)
+                .map(|s| s.cleanup_files.clone())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+
+    if cleanup_files.is_empty() {
+        println!("no cleanup patterns defined for '{}'", game.title);
+        return Ok(());
+    }
+
+    let plan = cleanup::build_cleanup_plan(&game.install_dir, &cleanup_files);
+
+    if plan.is_empty() {
+        println!("nothing to clean in '{}'", game.title);
+        return Ok(());
+    }
+
+    println!("cleanup preview for '{}':", game.title);
+    for entry in &plan.entries {
+        if entry.is_dir {
+            println!("  remove dir:  {}", entry.path.display());
+        } else {
+            println!("  remove file: {}", entry.path.display());
+        }
+    }
+
+    let size = plan.total_size_bytes();
+    println!(
+        "total: {} file(s), {} dir(s) (~{} MB)",
+        plan.file_count(),
+        plan.dir_count(),
+        size / 1_048_576,
+    );
+
+    if !yes {
+        print!("\nproceed? [y/N] ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("cleanup aborted.");
+            return Ok(());
+        }
+    }
+
+    let result = cleanup::execute_cleanup(&plan);
+    println!(
+        "cleanup done: {} removed, {} errors",
+        result.removed, result.errors
+    );
+
+    // Mark cleanup done in user_overrides
+    let mut overrides = game
+        .user_overrides
+        .take()
+        .unwrap_or_else(|| serde_json::json!({}));
+    overrides["cleanup_done"] = serde_json::json!(true);
+    game.user_overrides = Some(overrides);
+    db.update_game(game)?;
+
+    Ok(())
+}
+
+/// Returns the launch binary for the runtime (proton script for Proton, wine for Wine).
 fn find_wine_binary(rt: &fenrir_core::runtime::Runtime) -> PathBuf {
     let proton = rt.path.join("proton");
     if proton.exists() {
