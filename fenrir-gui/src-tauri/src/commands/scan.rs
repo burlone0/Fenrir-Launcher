@@ -59,52 +59,26 @@ pub async fn scan_directory(
 
         total += result.total_candidates;
 
-        // DB upsert: lock held briefly per directory's results.
-        {
+        // DB upsert: lock acquired per game so concurrent commands (list_games,
+        // get_game) can interleave instead of waiting for the whole batch.
+        for classified in &result.high_confidence {
+            let exe = classified.exe_files.first().cloned().unwrap_or_default();
             let db = state.db.lock().map_err(|e| e.to_string())?;
-            for classified in &result.high_confidence {
-                let exe = classified.exe_files.first().cloned().unwrap_or_default();
-                match db
-                    .find_by_install_dir(&classified.path)
-                    .map_err(|e| e.to_string())?
-                {
-                    Some(mut existing) => {
-                        existing.title = classified.title.clone();
-                        existing.executable = exe;
-                        existing.store_origin = classified.store_origin;
-                        existing.crack_type = classified.crack_type;
-                        if existing.status == GameStatus::NeedsConfirmation {
-                            existing.status = GameStatus::Detected;
-                        }
-                        db.update_game(&existing).map_err(|e| e.to_string())?;
+            match db
+                .find_by_install_dir(&classified.path)
+                .map_err(|e| e.to_string())?
+            {
+                Some(mut existing) => {
+                    existing.title = classified.title.clone();
+                    existing.executable = exe;
+                    existing.store_origin = classified.store_origin;
+                    existing.crack_type = classified.crack_type;
+                    if existing.status == GameStatus::NeedsConfirmation {
+                        existing.status = GameStatus::Detected;
                     }
-                    None => {
-                        let game = Game {
-                            id: Uuid::new_v4(),
-                            title: classified.title.clone(),
-                            executable: exe,
-                            install_dir: classified.path.clone(),
-                            store_origin: classified.store_origin,
-                            crack_type: classified.crack_type,
-                            prefix_path: PathBuf::new(),
-                            runtime_id: None,
-                            status: GameStatus::Detected,
-                            play_time: 0,
-                            last_played: None,
-                            added_at: chrono::Utc::now(),
-                            user_overrides: None,
-                        };
-                        db.insert_game(&game).map_err(|e| e.to_string())?;
-                    }
+                    db.update_game(&existing).map_err(|e| e.to_string())?;
                 }
-            }
-            for classified in &result.needs_confirmation {
-                let exe = classified.exe_files.first().cloned().unwrap_or_default();
-                if db
-                    .find_by_install_dir(&classified.path)
-                    .map_err(|e| e.to_string())?
-                    .is_none()
-                {
+                None => {
                     let game = Game {
                         id: Uuid::new_v4(),
                         title: classified.title.clone(),
@@ -114,7 +88,7 @@ pub async fn scan_directory(
                         crack_type: classified.crack_type,
                         prefix_path: PathBuf::new(),
                         runtime_id: None,
-                        status: GameStatus::NeedsConfirmation,
+                        status: GameStatus::Detected,
                         play_time: 0,
                         last_played: None,
                         added_at: chrono::Utc::now(),
@@ -122,6 +96,32 @@ pub async fn scan_directory(
                     };
                     db.insert_game(&game).map_err(|e| e.to_string())?;
                 }
+            }
+        }
+        for classified in &result.needs_confirmation {
+            let exe = classified.exe_files.first().cloned().unwrap_or_default();
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            if db
+                .find_by_install_dir(&classified.path)
+                .map_err(|e| e.to_string())?
+                .is_none()
+            {
+                let game = Game {
+                    id: Uuid::new_v4(),
+                    title: classified.title.clone(),
+                    executable: exe,
+                    install_dir: classified.path.clone(),
+                    store_origin: classified.store_origin,
+                    crack_type: classified.crack_type,
+                    prefix_path: PathBuf::new(),
+                    runtime_id: None,
+                    status: GameStatus::NeedsConfirmation,
+                    play_time: 0,
+                    last_played: None,
+                    added_at: chrono::Utc::now(),
+                    user_overrides: None,
+                };
+                db.insert_game(&game).map_err(|e| e.to_string())?;
             }
         }
 

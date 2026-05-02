@@ -307,6 +307,15 @@ pub async fn launch_game(
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
 
+    // Reject double-launch up-front so the user gets a clear error instead of
+    // two concurrent prefix-mounted processes fighting over the same save dir.
+    {
+        let running = state.running.lock().map_err(|e| e.to_string())?;
+        if running.contains_key(&uuid) {
+            return Err(format!("game '{id}' is already running"));
+        }
+    }
+
     let (game, runtime, log_dir) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let game = db
@@ -374,14 +383,30 @@ pub async fn launch_game(
     let log_path = log_dir.join(format!("{}.log", game.id));
 
     let child = launch(&config).map_err(|e| e.to_string())?;
+    let pid = child.id();
+
+    // Register PID before monitoring so kill_game can find it. Drop the
+    // guard before spawn_blocking so we don't hold the lock across the await.
+    {
+        let mut running = state.running.lock().map_err(|e| e.to_string())?;
+        running.insert(uuid, pid);
+    }
 
     let game_id_clone = id.clone();
     let app_clone = app.clone();
+    let running_arc = state.running.clone();
 
     let result: LaunchResult =
         tokio::task::spawn_blocking(move || monitor_process(child, &log_path))
             .await
             .map_err(|e| e.to_string())?;
+
+    // Always remove from running, even if the DB update below fails.
+    {
+        if let Ok(mut running) = running_arc.lock() {
+            running.remove(&uuid);
+        }
+    }
 
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -402,4 +427,46 @@ pub async fn launch_game(
     );
 
     Ok(())
+}
+
+// ── kill_game / is_running ───────────────────────────────────────────────────
+
+/// Send SIGTERM to the running game process. Returns Err if the game is not
+/// currently being tracked as running. Wine/Proton receive the signal and
+/// usually shut down cleanly within a couple of seconds.
+#[tauri::command]
+pub async fn kill_game(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+
+    let pid = {
+        let running = state.running.lock().map_err(|e| e.to_string())?;
+        match running.get(&uuid) {
+            Some(p) => *p,
+            None => return Err(format!("game '{id}' is not running")),
+        }
+    };
+
+    #[cfg(unix)]
+    {
+        // SAFETY: kill is FFI-safe; passing a non-existent PID returns ESRCH
+        // which we surface as Err. SIGTERM is the polite shutdown signal.
+        let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        if rc != 0 {
+            let err = std::io::Error::last_os_error();
+            return Err(format!("failed to signal pid {pid}: {err}"));
+        }
+    }
+
+    // launch_game's monitor task will observe the exit and remove the entry
+    // from the running map; we don't touch it here to avoid a TOCTOU race.
+
+    Ok(())
+}
+
+/// Frontend hook: query whether a given game is currently running.
+#[tauri::command]
+pub async fn is_running(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+    let running = state.running.lock().map_err(|e| e.to_string())?;
+    Ok(running.contains_key(&uuid))
 }
