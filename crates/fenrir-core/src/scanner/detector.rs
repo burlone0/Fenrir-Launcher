@@ -168,6 +168,46 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
         !drop
     });
 
+    // Step 5: single-folder fallback. The walk above intentionally skips exes
+    // whose immediate parent is the scan root (they would otherwise pollute
+    // multi-game scans like ~/Games/Crack/). When that produces zero candidates
+    // and the scan root itself contains exes, the user is most likely scanning
+    // a single game's directory directly — promote the scan root to a candidate.
+    // Classifier signature matching prevents random *.exe files from being
+    // treated as games.
+    if candidates.is_empty() {
+        let root_exes: Vec<PathBuf> = WalkDir::new(root)
+            .max_depth(1)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|s| s.eq_ignore_ascii_case("exe"))
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path().to_path_buf())
+            .collect();
+
+        if !root_exes.is_empty() {
+            let candidate = GameCandidate {
+                path: root.to_path_buf(),
+                exe_files: root_exes,
+            };
+            if !is_installer_only(&candidate) {
+                debug!(
+                    "single-folder fallback: scan root {} promoted to candidate ({} exe(s))",
+                    candidate.path.display(),
+                    candidate.exe_files.len()
+                );
+                candidates.push(candidate);
+            }
+        }
+    }
+
     for c in &candidates {
         debug!(
             "candidate: {} ({} exe(s))",
@@ -431,6 +471,60 @@ mod tests {
         );
         assert_eq!(candidates[0].path, game_dir);
         assert_eq!(candidates[0].exe_files.len(), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug #4: single-folder scan — exe directly under scan root must be
+    // recognized when no other candidate exists in the tree.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_single_folder_scan_with_exe_at_root_finds_candidate() {
+        // Simulates `fenrir scan --path /path/to/cult_of_the_lamb_(90323)/`
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("Cult Of The Lamb.exe"), "fake").unwrap();
+        fs::write(dir.path().join("goggame-1328365634.info"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(
+            candidates.len(),
+            1,
+            "scan-root with exe must be promoted when no other candidates exist"
+        );
+        assert_eq!(candidates[0].path, dir.path());
+        assert!(candidates[0]
+            .exe_files
+            .iter()
+            .any(|e| e.ends_with("Cult Of The Lamb.exe")));
+    }
+
+    #[test]
+    fn test_single_folder_fallback_drops_installer_only_root() {
+        // Random ~/Downloads/ folder with only setup.exe must NOT become a candidate
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("setup.exe"), "fake").unwrap();
+        fs::write(dir.path().join("vcredist_x64.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert!(
+            candidates.is_empty(),
+            "scan-root with only installer exes must not be promoted"
+        );
+    }
+
+    #[test]
+    fn test_single_folder_fallback_skipped_when_other_candidates_exist() {
+        // A multi-game scan finds candidates in subdirs → fallback must not fire
+        // even if scan root itself has an exe (e.g. a launcher leftover).
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("stray.exe"), "fake").unwrap();
+        let game = dir.path().join("RealGame");
+        fs::create_dir(&game).unwrap();
+        fs::write(game.join("game.exe"), "fake").unwrap();
+
+        let candidates = find_game_candidates(dir.path(), 6);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].path, game);
     }
 
     #[test]
