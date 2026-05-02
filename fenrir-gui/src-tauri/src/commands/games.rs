@@ -27,32 +27,47 @@ fn resolve_runtime(runtime_dir: &Path, runtime_id: Option<&str>) -> Option<Runti
     runtimes.into_iter().next()
 }
 
-/// Mirror of CLI find_wine_for_prefix_ops.
-fn wine_for_prefix(rt: &Runtime, is_proton: bool) -> PathBuf {
+/// Mirror of CLI find_wine_for_prefix_ops. Errors if no usable Wine binary
+/// exists rather than silently returning a missing /usr/bin/wine.
+fn wine_for_prefix(rt: &Runtime, is_proton: bool) -> Result<PathBuf, String> {
     if is_proton {
         let internal = rt.path.join("files/bin/wine");
         if internal.exists() {
-            return internal;
+            return Ok(internal);
         }
     }
-    let wine = rt.path.join("bin/wine");
-    if wine.exists() {
-        return wine;
+    let bundled = rt.path.join("bin/wine");
+    if bundled.exists() {
+        return Ok(bundled);
     }
-    PathBuf::from("/usr/bin/wine")
+    let system = PathBuf::from("/usr/bin/wine");
+    if system.exists() {
+        return Ok(system);
+    }
+    Err(format!(
+        "no Wine binary found in runtime '{}' or at /usr/bin/wine — install Wine via your distro's package manager or pick a different runtime",
+        rt.id
+    ))
 }
 
 /// Mirror of CLI find_wine_binary (used for launch, not prefix ops).
-fn wine_binary(rt: &Runtime) -> PathBuf {
+fn wine_binary(rt: &Runtime) -> Result<PathBuf, String> {
     let proton = rt.path.join("proton");
     if proton.exists() {
-        return proton;
+        return Ok(proton);
     }
-    let wine = rt.path.join("bin/wine");
-    if wine.exists() {
-        return wine;
+    let bundled = rt.path.join("bin/wine");
+    if bundled.exists() {
+        return Ok(bundled);
     }
-    PathBuf::from("/usr/bin/wine")
+    let system = PathBuf::from("/usr/bin/wine");
+    if system.exists() {
+        return Ok(system);
+    }
+    Err(format!(
+        "no Wine/Proton binary found in runtime '{}' or at /usr/bin/wine — install Wine via your distro's package manager or pick a different runtime",
+        rt.id
+    ))
 }
 
 fn find_data_subdir(name: &str) -> Option<PathBuf> {
@@ -163,7 +178,7 @@ pub async fn configure_game(
         runtime.runtime_type,
         fenrir_core::runtime::RuntimeType::Proton | fenrir_core::runtime::RuntimeType::ProtonGE
     );
-    let wine_bin = wine_for_prefix(&runtime, is_proton);
+    let wine_bin = wine_for_prefix(&runtime, is_proton)?;
 
     let prefix_path_clone = prefix_path.clone();
     let wine_bin_clone = wine_bin.clone();
@@ -180,7 +195,19 @@ pub async fn configure_game(
     if let Some(dir) = profiles_dir {
         if let Ok(profiles) = load_profiles_from_dir(&dir) {
             if let Some(profile) = profiles.get(profile_name) {
-                apply_profile(&prefix_path, &wine_bin, profile, None).map_err(|e| e.to_string())?;
+                if let Err(e) = apply_profile(&prefix_path, &wine_bin, profile, None) {
+                    // Prefix exists on disk but tuning failed — mark Broken so the
+                    // game shows the failure state instead of staying in Detected
+                    // limbo with an orphan prefix.
+                    let mut broken = game.clone();
+                    broken.prefix_path = prefix_path.clone();
+                    broken.runtime_id = Some(runtime.id.clone());
+                    broken.status = GameStatus::Broken;
+                    if let Ok(db) = state.db.lock() {
+                        let _ = db.update_game(&broken);
+                    }
+                    return Err(e.to_string());
+                }
             }
         }
     }
@@ -317,7 +344,7 @@ pub async fn launch_game(
         runtime.runtime_type,
         fenrir_core::runtime::RuntimeType::Proton | fenrir_core::runtime::RuntimeType::ProtonGE
     );
-    let wine_bin = wine_binary(&runtime);
+    let wine_bin = wine_binary(&runtime)?;
     let proton_path = if is_proton {
         Some(runtime.path.clone())
     } else {
