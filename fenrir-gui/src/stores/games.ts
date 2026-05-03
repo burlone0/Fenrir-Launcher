@@ -4,6 +4,7 @@ import {
   listGames,
   configureGame as configureGameCmd,
   launchGame as launchGameCmd,
+  killGame as killGameCmd,
   deleteGame as deleteGameCmd,
 } from "../lib/commands";
 import { onConfigureDone, onLaunchEnded } from "../lib/events";
@@ -20,6 +21,7 @@ interface GamesStore {
   selectGame: (id: string | null) => void;
   configureGame: (id: string, clean: boolean) => Promise<void>;
   launchGame: (id: string) => Promise<void>;
+  stopGame: (id: string) => Promise<void>;
   deleteGame: (id: string) => Promise<void>;
   addDetectedGames: (games: ClassifiedGame[]) => void;
   updateGame: (game: Game) => void;
@@ -89,6 +91,11 @@ export const useGamesStore = create<GamesStore>((set, get) => ({
       set({ launchingId: null });
       throw e;
     }
+  },
+
+  stopGame: async (id) => {
+    // SIGTERM sent; launchingId cleared by launchGame's onLaunchEnded listener
+    await killGameCmd(id);
   },
 
   deleteGame: async (id) => {
