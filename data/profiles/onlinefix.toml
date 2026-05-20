@@ -19,7 +19,14 @@ windows_version = "win10"
 # OnlineFix ships multiple native DLLs that must override Wine's builtins:
 # - steam_api / steam_api64 / steamclient / steamclient64: Steam API emulation
 # - OnlineFix64 / SteamOverlay64: core OnlineFix multiplayer and overlay hooks
-# - winmm / winhttp: native-first so OnlineFix can intercept them for relay
+# - version: modern OnlineFix loader hook (DLL hijacking entry point that
+#   reads dlllist.txt and pulls in OnlineFix64.dll + SteamOverlay64.dll).
+#   Without this Wine uses its builtin version.dll and the multiplayer patch
+#   never loads — the game still launches with steam_api64 spacewar fakeapp,
+#   so overlay works but invites/lobbies/rich-presence are dead.
+# - winmm: legacy OnlineFix loader hook (older releases use this instead of
+#   version.dll). Both kept native-first to cover both crack vintages.
+# - winhttp: some OnlineFix builds chain through winhttp for HTTPS relay
 # - dnet: DirectNet used by some titles for peer-to-peer session data
 # The "n,b" suffix means "native first, fall back to builtin" — safer than pure
 # "n" because Wine keeps working if the native DLL is missing for this title.
@@ -27,7 +34,8 @@ dll_overrides = [
     "steam_api=n,b", "steam_api64=n,b",
     "steamclient=n,b", "steamclient64=n,b",
     "OnlineFix64=n,b", "SteamOverlay64=n,b",
-    "winmm=n,b", "dnet=n", "winhttp=n,b",
+    "version=n,b", "winmm=n,b",
+    "winhttp=n,b", "dnet=n",
 ]
 
 [env]
