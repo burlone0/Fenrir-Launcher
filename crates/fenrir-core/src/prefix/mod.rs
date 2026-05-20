@@ -1,10 +1,12 @@
 pub mod builder;
 pub mod profile;
 pub mod tuner;
+pub mod winetricks;
 
 pub use builder::{build_wine_env, create_prefix, prefix_path_for_game};
-pub use profile::{load_profiles_from_dir, WineProfile};
+pub use profile::{load_profiles_from_dir, WineProfile, WinetricksConfig};
 pub use tuner::apply_profile;
+pub use winetricks::install_components;
 
 /// Maps a game's crack type to its Wine profile name.
 pub fn crack_type_to_profile_name(
@@ -13,6 +15,7 @@ pub fn crack_type_to_profile_name(
     use crate::library::game::CrackType;
     match crack_type {
         Some(CrackType::OnlineFix) => "onlinefix",
+        Some(CrackType::OnlineFixMelonLoader) => "onlinefix_melonloader",
         Some(CrackType::DODI) => "dodi",
         Some(CrackType::FitGirl) => "fitgirl",
         Some(CrackType::Scene) => "scene",
@@ -32,6 +35,10 @@ mod tests {
         assert_eq!(
             crack_type_to_profile_name(Some(CrackType::OnlineFix)),
             "onlinefix"
+        );
+        assert_eq!(
+            crack_type_to_profile_name(Some(CrackType::OnlineFixMelonLoader)),
+            "onlinefix_melonloader"
         );
         assert_eq!(crack_type_to_profile_name(Some(CrackType::DODI)), "dodi");
         assert_eq!(

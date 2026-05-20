@@ -395,6 +395,7 @@ fn parse_store(store: &Option<String>) -> StoreOrigin {
 fn parse_crack(s: &str) -> CrackType {
     match s {
         "OnlineFix" => CrackType::OnlineFix,
+        "OnlineFixMelonLoader" => CrackType::OnlineFixMelonLoader,
         "DODI" => CrackType::DODI,
         "FitGirl" => CrackType::FitGirl,
         "Scene" => CrackType::Scene,

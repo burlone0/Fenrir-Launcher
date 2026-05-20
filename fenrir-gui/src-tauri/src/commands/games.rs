@@ -189,12 +189,65 @@ pub async fn configure_game(
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
 
-    emit("applying profile");
     let profile_name = crack_type_to_profile_name(game.crack_type);
     let profiles_dir = find_data_subdir("profiles");
     if let Some(dir) = profiles_dir {
         if let Ok(profiles) = load_profiles_from_dir(&dir) {
             if let Some(profile) = profiles.get(profile_name) {
+                // Install winetricks components first — slow but idempotent.
+                // Wrap in spawn_blocking so the (potentially long) winetricks
+                // invocation does not stall the Tauri runtime.
+                if !profile.winetricks.components.is_empty()
+                    || !profile.winetricks.optional.is_empty()
+                {
+                    emit("installing prefix dependencies (may take several minutes)");
+                    let prefix_clone = prefix_path.clone();
+                    let winetricks_clone = profile.winetricks.clone();
+                    let app_for_steps = app.clone();
+                    let install_result = tokio::task::spawn_blocking(move || {
+                        fenrir_core::prefix::install_components(
+                            &prefix_clone,
+                            &winetricks_clone,
+                            |step| {
+                                let _ = app_for_steps.emit(
+                                    "configure:step",
+                                    ConfigureStepPayload {
+                                        step: step.to_string(),
+                                    },
+                                );
+                            },
+                        )
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    match install_result {
+                        Ok(()) => {}
+                        Err(fenrir_core::error::PrefixError::WinetricksMissing) => {
+                            // Surface as warning step rather than aborting:
+                            // user can install winetricks and re-configure.
+                            emit(
+                                "warning: winetricks not found in PATH — required components \
+                                 were not installed",
+                            );
+                        }
+                        Err(e) => {
+                            // Mark Broken: prefix exists but the dependency
+                            // step failed, so launching would silently miss
+                            // mod-loader functionality.
+                            let mut broken = game.clone();
+                            broken.prefix_path = prefix_path.clone();
+                            broken.runtime_id = Some(runtime.id.clone());
+                            broken.status = GameStatus::Broken;
+                            if let Ok(db) = state.db.lock() {
+                                let _ = db.update_game(&broken);
+                            }
+                            return Err(e.to_string());
+                        }
+                    }
+                }
+
+                emit("applying profile");
                 if let Err(e) = apply_profile(&prefix_path, &wine_bin, profile, None) {
                     // Prefix exists on disk but tuning failed — mark Broken so the
                     // game shows the failure state instead of staying in Detected
