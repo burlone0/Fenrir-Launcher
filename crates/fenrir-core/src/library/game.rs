@@ -31,6 +31,11 @@ pub enum StoreOrigin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CrackType {
     OnlineFix,
+    /// OnlineFix-cracked Steam game with MelonLoader installed and multiplayer
+    /// provided by a MelonLoader mod (e.g. Megabonk + BonkWithFriends). Needs
+    /// .NET 6 Desktop Runtime in the prefix — handled by the
+    /// `onlinefix_melonloader` profile's winetricks components.
+    OnlineFixMelonLoader,
     DODI,
     FitGirl,
     Scene,
@@ -65,6 +70,7 @@ impl std::fmt::Display for CrackType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OnlineFix => write!(f, "OnlineFix"),
+            Self::OnlineFixMelonLoader => write!(f, "OnlineFix + MelonLoader"),
             Self::DODI => write!(f, "DODI"),
             Self::FitGirl => write!(f, "FitGirl"),
             Self::Scene => write!(f, "Scene"),
@@ -104,6 +110,10 @@ mod tests {
     #[test]
     fn test_crack_type_display() {
         assert_eq!(CrackType::OnlineFix.to_string(), "OnlineFix");
+        assert_eq!(
+            CrackType::OnlineFixMelonLoader.to_string(),
+            "OnlineFix + MelonLoader"
+        );
         assert_eq!(CrackType::DODI.to_string(), "DODI");
         assert_eq!(CrackType::FitGirl.to_string(), "FitGirl");
         assert_eq!(CrackType::Scene.to_string(), "Scene");

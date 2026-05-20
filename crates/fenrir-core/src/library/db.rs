@@ -237,6 +237,7 @@ fn parse_store_origin(s: &str) -> StoreOrigin {
 fn parse_crack_type(s: &str) -> CrackType {
     match s {
         "OnlineFix" => CrackType::OnlineFix,
+        "OnlineFix + MelonLoader" => CrackType::OnlineFixMelonLoader,
         "DODI" => CrackType::DODI,
         "FitGirl" => CrackType::FitGirl,
         "Scene" => CrackType::Scene,
@@ -440,6 +441,7 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         for (i, ct) in [
             CrackType::OnlineFix,
+            CrackType::OnlineFixMelonLoader,
             CrackType::DODI,
             CrackType::FitGirl,
             CrackType::Scene,

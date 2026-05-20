@@ -10,6 +10,26 @@ pub struct WineProfile {
     #[serde(default)]
     pub env: HashMap<String, String>,
     pub features: FeatureConfig,
+    #[serde(default)]
+    pub winetricks: WinetricksConfig,
+}
+
+/// Optional winetricks components a profile may require in the prefix.
+///
+/// `components` are mandatory — the configure flow must install all of them
+/// (or surface an error) before the profile is considered applied.
+/// `optional` are best-effort — if an install fails (no network, package
+/// outdated, etc.) the configure continues with a warning.
+///
+/// Component names are passed verbatim to `winetricks -q <name>`. See
+/// `winetricks list-all` for valid identifiers (e.g. `dotnetdesktop6`,
+/// `vcrun2019`, `corefonts`).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct WinetricksConfig {
+    #[serde(default)]
+    pub components: Vec<String>,
+    #[serde(default)]
+    pub optional: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -121,6 +141,39 @@ fsync = false
         let profiles = load_profiles_from_dir(dir.path()).unwrap();
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles["test"].profile.name, "test");
+    }
+
+    #[test]
+    fn test_parse_profile_with_winetricks_section() {
+        let content = r#"
+[profile]
+name = "modded"
+description = "MelonLoader-modded games"
+
+[wine]
+windows_version = "win10"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+
+[winetricks]
+components = ["dotnetdesktop6"]
+optional = ["corefonts"]
+"#;
+        let profile = WineProfile::parse(content).unwrap();
+        assert_eq!(profile.winetricks.components, vec!["dotnetdesktop6"]);
+        assert_eq!(profile.winetricks.optional, vec!["corefonts"]);
+    }
+
+    #[test]
+    fn test_parse_profile_without_winetricks_section_defaults_empty() {
+        // Pre-existing profiles must keep parsing without the new section.
+        let profile = WineProfile::parse(TEST_PROFILE).unwrap();
+        assert!(profile.winetricks.components.is_empty());
+        assert!(profile.winetricks.optional.is_empty());
     }
 
     #[test]

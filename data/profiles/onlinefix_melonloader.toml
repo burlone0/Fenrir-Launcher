@@ -1,0 +1,51 @@
+# =============================================================================
+# Fenrir -- Wine Tuning Profile: OnlineFix + MelonLoader
+# =============================================================================
+#
+# Applied to OnlineFix-cracked games that also ship MelonLoader and a mod
+# providing the actual multiplayer functionality (e.g. Megabonk +
+# BonkWithFriends). MelonLoader 0.6+ requires the .NET 6 Desktop Runtime
+# inside the Wine prefix to bootstrap, otherwise mods never load and the
+# game runs as if no mods existed (overlay + Spacewar AppId still work via
+# OnlineFix steam_api64, but invites/lobbies/rich-presence are dead).
+#
+# See docs/dev/profiles-guide.md for the full format reference.
+# =============================================================================
+
+[profile]
+name = "onlinefix_melonloader"
+description = "OnlineFix with MelonLoader mod-based multiplayer (.NET 6 required)"
+
+[wine]
+windows_version = "win10"
+
+# Same DLL override set as the plain onlinefix profile — both crack vintages
+# are covered (version.dll is what MelonLoader hooks into; winmm is the
+# legacy OnlineFix path). See profiles/onlinefix.toml for per-entry rationale.
+dll_overrides = [
+    "steam_api=n,b", "steam_api64=n,b",
+    "steamclient=n,b", "steamclient64=n,b",
+    "OnlineFix64=n,b", "SteamOverlay64=n,b",
+    "version=n,b", "winmm=n,b",
+    "winhttp=n,b", "dnet=n",
+]
+
+[env]
+# OnlineFix sometimes hits OpenSSL issues on certain CPU instruction sets.
+OPENSSL_ia32cap = "~0x20000000"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+
+[winetricks]
+# .NET 6 Desktop Runtime is what MelonLoader.NativeHost.dll needs to spin up
+# the CLR. Installation takes 5-10 minutes on first configure; subsequent
+# runs detect it already installed and skip.
+components = ["dotnetdesktop6"]
+
+# corefonts often improves the legibility of the MelonLoader console window
+# on Wine setups without bundled MS fonts. Optional — not all users care.
+optional = ["corefonts"]

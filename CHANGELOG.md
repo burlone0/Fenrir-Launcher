@@ -8,6 +8,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.4.0] - 2026-05-20
+
+Concurrent-launch hardening, kill-game support end-to-end, winetricks
+component installation for mod-loader-aware profiles, and several scanner
+and Wine-profile correctness fixes.
+
+### Added
+
+- **Concurrent launch protection + `kill_game` backend** — `AppState`'s DB
+  and config are now wrapped in `Arc<Mutex<...>>` and a new
+  `Arc<Mutex<HashMap<Uuid, u32>>>` tracks live game PIDs. `launch_game`
+  rejects double-launching the same UUID up-front; the PID is registered
+  before spawning the monitor task and removed on exit (including on
+  monitor-thread panics, via a cloned `Arc` independent of state borrow).
+  New `kill_game(id)` command sends `SIGTERM` via `libc::kill` (Unix), and
+  `is_running(id)` provides a cheap query for the frontend to drive
+  Launch/Kill button state without polling events. `scan_directory` now
+  takes the DB lock per upsert instead of holding it for the whole batch,
+  so `list_games` / `get_game` interleave correctly during a long scan.
+  Adds `libc 0.2` as a Unix-only dependency.
+- **Stop button in GameDetail** — wires `kill_game` and `is_running` to the
+  UI. When a game is running, the GameDetail panel shows a Stop button in
+  place of the disabled Launch button. Sends `SIGTERM`; `launchingId`
+  clears automatically when the launch monitor observes the exit.
+- **Winetricks component installation** — new `[winetricks]` section in
+  `WineProfile` declares mandatory `.components` and `.optional`
+  (best-effort) components installed idempotently via `winetricks -q`
+  between `create_prefix` and `apply_profile`. New
+  `CrackType::OnlineFixMelonLoader` variant with a matching signature and
+  `onlinefix_melonloader.toml` profile (`dotnetdesktop6` + `corefonts`)
+  covers OnlineFix bundles with MelonLoader-based multiplayer mods
+  (trigger case: Megabonk + BonkWithFriends). GUI wraps the install in
+  `spawn_blocking` and emits `configure:step` progress events; missing
+  winetricks surfaces as a non-fatal warning, component install failures
+  mark the game `Broken`. Existing profiles parse unchanged via
+  `#[serde(default)]`. The new signature scores ~125 against MelonLoader
+  installs vs plain `onlinefix`'s ~60.
+
+### Fixed
+
+- **Scanner skips version-numbered directories** — directories whose names
+  look like bare version strings (e.g. `14.40`, `1.0.2`, `v2.3.1`) are now
+  filtered in `is_ignored_entry`. Prevents false positives from game
+  version archives like `Fortnite Versions/14.40` — real game roots never
+  have pure version-number names.
+- **Single-folder scan fallback + explicit Wine errors + Broken on configure
+  failure** — `fenrir scan --path /path/to/extracted-game/` now finds the
+  game when the regular walk produces zero candidates: the scan root is
+  promoted to a candidate as a fallback (random folders with only
+  `setup.exe` are still filtered by `is_installer_only`). `wine_for_prefix`
+  / `wine_binary` return `Result<PathBuf, String>` instead of silently
+  returning a missing `/usr/bin/wine`, so users without system Wine get a
+  clear error pointing them at the Runtimes tab. When `apply_profile`
+  fails inside `configure_game` after the prefix is already on disk, the
+  game is marked `GameStatus::Broken` before returning, so the Library
+  shows a recoverable failure state instead of leaving the game in
+  `Detected` limbo with an orphan prefix.
+- **`version.dll` override added to OnlineFix profile** — modern OnlineFix
+  releases (and OnlineFix bundles with mod loaders like MelonLoader, e.g.
+  Megabonk + BonkWithFriends) use `version.dll` as the DLL-hijacking entry
+  point. Without the native override, Wine loaded its builtin
+  `version.dll` and the hook never fired — base steam_api64 spacewar
+  fakeapp still worked (overlay + AppId 480), but OnlineFix64.dll
+  rich-interface emulation (Friends/Lobby/Invites) and MelonLoader-based
+  multiplayer mods stayed unloaded. `version=n,b` is now set alongside
+  `winmm=n,b` so both crack vintages and modded variants are covered.
+
 ## [0.3.1] - 2026-05-03
 
 Patch release — backend hardening for the v0.3.0 GUI based on a post-release

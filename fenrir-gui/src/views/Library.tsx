@@ -24,6 +24,7 @@ export default function Library() {
     selectGame,
     configureGame,
     launchGame,
+    stopGame,
     deleteGame,
   } = useGamesStore();
   const { isScanOpen, openScan, notify } = useUIStore();
@@ -70,6 +71,14 @@ export default function Library() {
     } catch (e) {
       notify(String(e), "error");
       throw e;
+    }
+  };
+
+  const handleStop = async (id: string) => {
+    try {
+      await stopGame(id);
+    } catch (e) {
+      notify(String(e), "error");
     }
   };
 
@@ -143,6 +152,7 @@ export default function Library() {
           onClose={() => selectGame(null)}
           onConfigure={handleConfigure}
           onLaunch={handleLaunch}
+          onStop={handleStop}
           onDelete={handleDelete}
         />
       )}

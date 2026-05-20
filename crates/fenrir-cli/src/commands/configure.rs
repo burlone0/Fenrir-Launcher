@@ -60,6 +60,28 @@ pub fn run(query: &str, clean: bool, yes: bool) -> Result<(), Box<dyn std::error
         if let Some(dir) = profiles_dir {
             let profiles = load_profiles_from_dir(&dir)?;
             if let Some(profile) = profiles.get(profile_name) {
+                // 3a. Install required winetricks components (slow on first run,
+                // idempotent on re-runs). Skipped silently if profile has none.
+                if !profile.winetricks.components.is_empty()
+                    || !profile.winetricks.optional.is_empty()
+                {
+                    println!("  preparing prefix dependencies via winetricks...");
+                    match prefix::install_components(&prefix_path, &profile.winetricks, |step| {
+                        println!("    {step}");
+                    }) {
+                        Ok(()) => {}
+                        Err(fenrir_core::error::PrefixError::WinetricksMissing) => {
+                            eprintln!(
+                                "  warning: winetricks not in PATH — required components {:?} \
+                                 were not installed. Install winetricks via your distro's package \
+                                 manager and re-run configure.",
+                                profile.winetricks.components
+                            );
+                        }
+                        Err(e) => return Err(Box::new(e)),
+                    }
+                }
+
                 println!("  applying profile '{}'...", profile_name);
                 prefix::apply_profile(
                     &prefix_path,

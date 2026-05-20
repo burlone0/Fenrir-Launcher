@@ -32,6 +32,7 @@ interface Props {
   onClose: () => void;
   onConfigure: (id: string, clean: boolean) => Promise<void>;
   onLaunch: (id: string) => Promise<void>;
+  onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => void;
 }
 
@@ -42,6 +43,7 @@ export default function GameDetail({
   onClose,
   onConfigure,
   onLaunch,
+  onStop,
   onDelete,
 }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -150,20 +152,27 @@ export default function GameDetail({
 
         {/* Actions */}
         <div className="mt-auto flex flex-col gap-2 p-5 pt-3 border-t border-zinc-800">
-          {canLaunch && (
+          {isLaunching ? (
             <button
-              onClick={handleLaunch}
-              disabled={busy}
-              className={`text-xs px-3 py-2 rounded text-white w-full transition-colors ${
-                isLaunching
-                  ? "bg-green-800 cursor-not-allowed opacity-70"
-                  : busy
-                  ? "bg-green-900 cursor-not-allowed opacity-50"
-                  : "bg-green-700 hover:bg-green-600"
-              }`}
+              onClick={() => onStop(game.id)}
+              className="text-xs px-3 py-2 rounded text-white w-full transition-colors bg-red-700 hover:bg-red-600"
             >
-              {isLaunching ? "Game running…" : "Launch"}
+              Stop
             </button>
+          ) : (
+            canLaunch && (
+              <button
+                onClick={handleLaunch}
+                disabled={busy}
+                className={`text-xs px-3 py-2 rounded text-white w-full transition-colors ${
+                  busy
+                    ? "bg-green-900 cursor-not-allowed opacity-50"
+                    : "bg-green-700 hover:bg-green-600"
+                }`}
+              >
+                Launch
+              </button>
+            )
           )}
 
           {canConfigure && (

@@ -27,32 +27,47 @@ fn resolve_runtime(runtime_dir: &Path, runtime_id: Option<&str>) -> Option<Runti
     runtimes.into_iter().next()
 }
 
-/// Mirror of CLI find_wine_for_prefix_ops.
-fn wine_for_prefix(rt: &Runtime, is_proton: bool) -> PathBuf {
+/// Mirror of CLI find_wine_for_prefix_ops. Errors if no usable Wine binary
+/// exists rather than silently returning a missing /usr/bin/wine.
+fn wine_for_prefix(rt: &Runtime, is_proton: bool) -> Result<PathBuf, String> {
     if is_proton {
         let internal = rt.path.join("files/bin/wine");
         if internal.exists() {
-            return internal;
+            return Ok(internal);
         }
     }
-    let wine = rt.path.join("bin/wine");
-    if wine.exists() {
-        return wine;
+    let bundled = rt.path.join("bin/wine");
+    if bundled.exists() {
+        return Ok(bundled);
     }
-    PathBuf::from("/usr/bin/wine")
+    let system = PathBuf::from("/usr/bin/wine");
+    if system.exists() {
+        return Ok(system);
+    }
+    Err(format!(
+        "no Wine binary found in runtime '{}' or at /usr/bin/wine — install Wine via your distro's package manager or pick a different runtime",
+        rt.id
+    ))
 }
 
 /// Mirror of CLI find_wine_binary (used for launch, not prefix ops).
-fn wine_binary(rt: &Runtime) -> PathBuf {
+fn wine_binary(rt: &Runtime) -> Result<PathBuf, String> {
     let proton = rt.path.join("proton");
     if proton.exists() {
-        return proton;
+        return Ok(proton);
     }
-    let wine = rt.path.join("bin/wine");
-    if wine.exists() {
-        return wine;
+    let bundled = rt.path.join("bin/wine");
+    if bundled.exists() {
+        return Ok(bundled);
     }
-    PathBuf::from("/usr/bin/wine")
+    let system = PathBuf::from("/usr/bin/wine");
+    if system.exists() {
+        return Ok(system);
+    }
+    Err(format!(
+        "no Wine/Proton binary found in runtime '{}' or at /usr/bin/wine — install Wine via your distro's package manager or pick a different runtime",
+        rt.id
+    ))
 }
 
 fn find_data_subdir(name: &str) -> Option<PathBuf> {
@@ -163,7 +178,7 @@ pub async fn configure_game(
         runtime.runtime_type,
         fenrir_core::runtime::RuntimeType::Proton | fenrir_core::runtime::RuntimeType::ProtonGE
     );
-    let wine_bin = wine_for_prefix(&runtime, is_proton);
+    let wine_bin = wine_for_prefix(&runtime, is_proton)?;
 
     let prefix_path_clone = prefix_path.clone();
     let wine_bin_clone = wine_bin.clone();
@@ -174,13 +189,78 @@ pub async fn configure_game(
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
 
-    emit("applying profile");
     let profile_name = crack_type_to_profile_name(game.crack_type);
     let profiles_dir = find_data_subdir("profiles");
     if let Some(dir) = profiles_dir {
         if let Ok(profiles) = load_profiles_from_dir(&dir) {
             if let Some(profile) = profiles.get(profile_name) {
-                apply_profile(&prefix_path, &wine_bin, profile, None).map_err(|e| e.to_string())?;
+                // Install winetricks components first — slow but idempotent.
+                // Wrap in spawn_blocking so the (potentially long) winetricks
+                // invocation does not stall the Tauri runtime.
+                if !profile.winetricks.components.is_empty()
+                    || !profile.winetricks.optional.is_empty()
+                {
+                    emit("installing prefix dependencies (may take several minutes)");
+                    let prefix_clone = prefix_path.clone();
+                    let winetricks_clone = profile.winetricks.clone();
+                    let app_for_steps = app.clone();
+                    let install_result = tokio::task::spawn_blocking(move || {
+                        fenrir_core::prefix::install_components(
+                            &prefix_clone,
+                            &winetricks_clone,
+                            |step| {
+                                let _ = app_for_steps.emit(
+                                    "configure:step",
+                                    ConfigureStepPayload {
+                                        step: step.to_string(),
+                                    },
+                                );
+                            },
+                        )
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    match install_result {
+                        Ok(()) => {}
+                        Err(fenrir_core::error::PrefixError::WinetricksMissing) => {
+                            // Surface as warning step rather than aborting:
+                            // user can install winetricks and re-configure.
+                            emit(
+                                "warning: winetricks not found in PATH — required components \
+                                 were not installed",
+                            );
+                        }
+                        Err(e) => {
+                            // Mark Broken: prefix exists but the dependency
+                            // step failed, so launching would silently miss
+                            // mod-loader functionality.
+                            let mut broken = game.clone();
+                            broken.prefix_path = prefix_path.clone();
+                            broken.runtime_id = Some(runtime.id.clone());
+                            broken.status = GameStatus::Broken;
+                            if let Ok(db) = state.db.lock() {
+                                let _ = db.update_game(&broken);
+                            }
+                            return Err(e.to_string());
+                        }
+                    }
+                }
+
+                emit("applying profile");
+                if let Err(e) = apply_profile(&prefix_path, &wine_bin, profile, None) {
+                    // Prefix exists on disk but tuning failed — mark Broken so the
+                    // game shows the failure state instead of staying in Detected
+                    // limbo with an orphan prefix.
+                    let mut broken = game.clone();
+                    broken.prefix_path = prefix_path.clone();
+                    broken.runtime_id = Some(runtime.id.clone());
+                    broken.status = GameStatus::Broken;
+                    if let Ok(db) = state.db.lock() {
+                        let _ = db.update_game(&broken);
+                    }
+                    return Err(e.to_string());
+                }
             }
         }
     }
@@ -280,6 +360,15 @@ pub async fn launch_game(
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
 
+    // Reject double-launch up-front so the user gets a clear error instead of
+    // two concurrent prefix-mounted processes fighting over the same save dir.
+    {
+        let running = state.running.lock().map_err(|e| e.to_string())?;
+        if running.contains_key(&uuid) {
+            return Err(format!("game '{id}' is already running"));
+        }
+    }
+
     let (game, runtime, log_dir) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let game = db
@@ -317,7 +406,7 @@ pub async fn launch_game(
         runtime.runtime_type,
         fenrir_core::runtime::RuntimeType::Proton | fenrir_core::runtime::RuntimeType::ProtonGE
     );
-    let wine_bin = wine_binary(&runtime);
+    let wine_bin = wine_binary(&runtime)?;
     let proton_path = if is_proton {
         Some(runtime.path.clone())
     } else {
@@ -347,14 +436,30 @@ pub async fn launch_game(
     let log_path = log_dir.join(format!("{}.log", game.id));
 
     let child = launch(&config).map_err(|e| e.to_string())?;
+    let pid = child.id();
+
+    // Register PID before monitoring so kill_game can find it. Drop the
+    // guard before spawn_blocking so we don't hold the lock across the await.
+    {
+        let mut running = state.running.lock().map_err(|e| e.to_string())?;
+        running.insert(uuid, pid);
+    }
 
     let game_id_clone = id.clone();
     let app_clone = app.clone();
+    let running_arc = state.running.clone();
 
     let result: LaunchResult =
         tokio::task::spawn_blocking(move || monitor_process(child, &log_path))
             .await
             .map_err(|e| e.to_string())?;
+
+    // Always remove from running, even if the DB update below fails.
+    {
+        if let Ok(mut running) = running_arc.lock() {
+            running.remove(&uuid);
+        }
+    }
 
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -375,4 +480,46 @@ pub async fn launch_game(
     );
 
     Ok(())
+}
+
+// ── kill_game / is_running ───────────────────────────────────────────────────
+
+/// Send SIGTERM to the running game process. Returns Err if the game is not
+/// currently being tracked as running. Wine/Proton receive the signal and
+/// usually shut down cleanly within a couple of seconds.
+#[tauri::command]
+pub async fn kill_game(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+
+    let pid = {
+        let running = state.running.lock().map_err(|e| e.to_string())?;
+        match running.get(&uuid) {
+            Some(p) => *p,
+            None => return Err(format!("game '{id}' is not running")),
+        }
+    };
+
+    #[cfg(unix)]
+    {
+        // SAFETY: kill is FFI-safe; passing a non-existent PID returns ESRCH
+        // which we surface as Err. SIGTERM is the polite shutdown signal.
+        let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        if rc != 0 {
+            let err = std::io::Error::last_os_error();
+            return Err(format!("failed to signal pid {pid}: {err}"));
+        }
+    }
+
+    // launch_game's monitor task will observe the exit and remove the entry
+    // from the running map; we don't touch it here to avoid a TOCTOU race.
+
+    Ok(())
+}
+
+/// Frontend hook: query whether a given game is currently running.
+#[tauri::command]
+pub async fn is_running(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+    let running = state.running.lock().map_err(|e| e.to_string())?;
+    Ok(running.contains_key(&uuid))
 }

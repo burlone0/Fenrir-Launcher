@@ -9,6 +9,8 @@ export const confirmGame = (query: string) => invoke<Game>("confirm_game", { que
 export const configureGame = (id: string, clean: boolean) =>
   invoke<void>("configure_game", { id, clean });
 export const launchGame = (id: string) => invoke<void>("launch_game", { id });
+export const killGame = (id: string) => invoke<void>("kill_game", { id });
+export const isRunning = (id: string) => invoke<boolean>("is_running", { id });
 export const deleteGame = (id: string) => invoke<void>("delete_game", { id });
 
 // --- Scan ---
