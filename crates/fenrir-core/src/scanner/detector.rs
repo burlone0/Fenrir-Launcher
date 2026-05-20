@@ -206,6 +206,33 @@ pub fn find_game_candidates(root: &Path, max_depth: usize) -> Vec<GameCandidate>
                 candidates.push(candidate);
             }
         }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        if !ext.eq_ignore_ascii_case("exe") {
+            continue;
+        }
+        let Some(parent) = path.parent() else {
+            continue;
+        };
+        if parent == root {
+            continue;
+        }
+
+        let resolved = resolve_game_root(parent, root);
+        if resolved != parent {
+            trace!(
+                "exe {} → promoted root {}",
+                path.display(),
+                resolved.display()
+            );
+        } else {
+            trace!("exe {} → root {}", path.display(), resolved.display());
+        }
+        grouped
+            .entry(resolved)
+            .or_default()
+            .push(path.to_path_buf());
     }
 
     for c in &candidates {
