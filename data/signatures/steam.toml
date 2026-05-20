@@ -63,6 +63,21 @@ optional_files = ["OnlineFix64.dll", "OnlineFix.url", "steamclient.dll"]
 confidence_boost = ["steam_settings/"]
 cleanup_files = ["OnlineFix.url", "_Redist/", "setup.exe", "autorun.inf", "*.url"]
 
+# OnlineFix games shipping MelonLoader for mod-based multiplayer (e.g. Megabonk
+# + BonkWithFriends). Scored higher than plain OnlineFix so it wins when both
+# match: 60 (2 required) + ~45 optionals + 20 boosts ≈ 125 vs onlinefix's ~60.
+# Maps to crack_type "OnlineFixMelonLoader" → onlinefix_melonloader profile,
+# which adds dotnetdesktop6 to the prefix via winetricks at configure time.
+[onlinefix_melonloader]
+name = "OnlineFix + MelonLoader"
+store = "Steam"
+crack_type = "OnlineFixMelonLoader"
+auto_add_threshold = 30
+required_files = ["OnlineFix.ini", "MelonLoader/"]
+optional_files = ["version.dll", "Mods/", "UserLibs/"]
+confidence_boost = ["MelonLoader/net6/", "Plugins/steam_api64.dll"]
+cleanup_files = ["OnlineFix.url", "_Redist/", "setup.exe", "autorun.inf", "*.url"]
+
 # FitGirl Repack -- identified by the fitgirl-repacks.site marker file.
 # FitGirl repacks are heavily compressed; the game directory looks like
 # a normal Steam crack after installation.

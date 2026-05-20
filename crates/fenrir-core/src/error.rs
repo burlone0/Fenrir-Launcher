@@ -215,6 +215,12 @@ pub enum PrefixError {
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("winetricks not found in PATH — install winetricks via your distro's package manager")]
+    WinetricksMissing,
+
+    #[error("winetricks component '{component}' failed: {reason}")]
+    WinetricksComponent { component: String, reason: String },
 }
 
 #[derive(Debug, thiserror::Error)]
