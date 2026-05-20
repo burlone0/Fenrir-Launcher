@@ -240,25 +240,6 @@ pub enum DownloadError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum DownloadError {
-    #[error("http error: {0}")]
-    Http(#[from] reqwest::Error),
-
-    #[error("checksum mismatch: expected {expected}, got {actual}")]
-    ChecksumMismatch { expected: String, actual: String },
-
-    #[error("no tarball found in release {0}")]
-    NoTarball(String),
-
-    #[error("extraction failed: {0}")]
-    Extraction(String),
-
-    #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum LauncherError {
     #[error("game not configured: {0}")]
