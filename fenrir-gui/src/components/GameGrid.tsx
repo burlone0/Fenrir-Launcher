@@ -25,7 +25,7 @@ export default function GameGrid({ games, selectedId, configuringId, launchingId
   }
 
   return (
-    <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-3">
       {games.map((g) => (
         <GameCard
           key={g.id}
