@@ -1,4 +1,5 @@
 import type { Game } from "../lib/types";
+import { coverFor } from "../lib/coverFor";
 import StatusBadge from "./StatusBadge";
 import StoreBadge from "./StoreBadge";
 
@@ -30,6 +31,7 @@ export default function GameCard({
 }: Props) {
   const playTime = formatPlayTime(game.play_time);
   const busy = isConfiguring || isLaunching;
+  const cover = coverFor(game.title);
 
   const handleAction = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,43 +61,57 @@ export default function GameCard({
   return (
     <div
       onClick={onSelect}
-      className={`rounded-lg border p-4 cursor-pointer transition-colors flex flex-col gap-2 ${
+      className={`rounded-lg border overflow-hidden cursor-pointer transition-colors flex flex-col ${
         selected
           ? "border-sky-500 bg-zinc-800"
           : "border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800/50"
       }`}
     >
-      <div className="font-semibold text-sm truncate" title={game.title}>
-        {game.title}
+      {/* Cover art placeholder */}
+      <div
+        className="h-24 rounded-t-lg flex items-center justify-center relative overflow-hidden"
+        style={{ backgroundColor: cover.bgColor }}
+      >
+        <div className="absolute inset-0 bg-black/20" />
+        <span className="relative z-10 text-white font-bold text-3xl select-none opacity-80">
+          {cover.initials}
+        </span>
       </div>
 
-      <div className="flex gap-1 flex-wrap">
-        <StoreBadge store={game.store_origin} />
-        <StatusBadge status={game.status} />
-        {game.crack_type && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">
-            {game.crack_type}
-          </span>
+      {/* Metadata */}
+      <div className="p-3 flex flex-col gap-2">
+        <div className="font-semibold text-sm truncate" title={game.title}>
+          {game.title}
+        </div>
+
+        <div className="flex gap-1 flex-wrap">
+          <StoreBadge store={game.store_origin} />
+          <StatusBadge status={game.status} />
+          {game.crack_type && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">
+              {game.crack_type}
+            </span>
+          )}
+        </div>
+
+        {playTime && <div className="text-xs text-zinc-500">{playTime} played</div>}
+
+        {game.status === "Broken" && (
+          <div className="text-xs text-red-400">⚠ needs attention</div>
+        )}
+
+        {actionLabel && (
+          <button
+            onClick={handleAction}
+            disabled={busy}
+            className={`mt-auto text-xs px-3 py-1.5 rounded self-start transition-colors ${actionColor} ${
+              busy ? "opacity-70 cursor-not-allowed animate-pulse" : "hover:brightness-110"
+            }`}
+          >
+            {actionLabel}
+          </button>
         )}
       </div>
-
-      {playTime && <div className="text-xs text-zinc-500">{playTime} played</div>}
-
-      {game.status === "Broken" && (
-        <div className="text-xs text-red-400">⚠ needs attention</div>
-      )}
-
-      {actionLabel && (
-        <button
-          onClick={handleAction}
-          disabled={busy}
-          className={`mt-auto text-xs px-3 py-1.5 rounded self-start transition-colors ${actionColor} ${
-            busy ? "opacity-70 cursor-not-allowed animate-pulse" : "hover:brightness-110"
-          }`}
-        >
-          {actionLabel}
-        </button>
-      )}
     </div>
   );
 }

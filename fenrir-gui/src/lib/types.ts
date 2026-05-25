@@ -18,6 +18,7 @@ export type StoreOrigin = "Steam" | "GOG" | "Epic" | "Unknown";
 
 export type CrackType =
   | "OnlineFix"
+  | "OnlineFixMelonLoader"
   | "DODI"
   | "FitGirl"
   | "Scene"
@@ -53,6 +54,30 @@ export interface ClassifiedGame {
   crack_type: CrackType | null;
   confidence: number;
   signature_name: string;
+}
+
+export interface FenrirConfig {
+  general: {
+    library_db: string;
+    prefix_dir: string;
+    runtime_dir: string;
+  };
+  scan: {
+    game_dirs: string[];
+    auto_scan: boolean;
+  };
+  privacy: {
+    fetch_metadata: boolean;
+    fetch_covers: boolean;
+    metadata_source: string;
+  };
+  defaults: {
+    runtime: string;
+    enable_dxvk: boolean;
+    enable_vkd3d: boolean;
+    esync: boolean;
+    fsync: boolean;
+  };
 }
 
 export interface ScanProgress {
