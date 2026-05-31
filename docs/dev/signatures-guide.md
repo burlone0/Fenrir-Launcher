@@ -182,6 +182,15 @@ indicate specific crack tools.
 **onlinefix** -- OnlineFix always drops an `OnlineFix.url` shortcut. The DLL
 (`OnlineFix64.dll`) and `steam_settings/` directory are strong secondary signals.
 
+**onlinefix_melonloader** -- A more specific variant of `onlinefix` for games
+that ship MelonLoader on top of an OnlineFix crack (e.g. Megabonk +
+BonkWithFriends). Requires both `OnlineFix.ini` and a `MelonLoader/`
+directory, scoring ~125 against MelonLoader-installed OnlineFix games vs the
+~60 of plain `onlinefix`. Maps to a dedicated profile that adds
+`dotnetdesktop6` via winetricks. See the
+[Modded Crack Pattern](#modded-crack-pattern) section below for the design
+rationale.
+
 **fitgirl** -- FitGirl leaves a `fitgirl-repacks.site` marker file. After
 installation, the game looks like a standard Steam crack (hence `steam_api.dll`
 as a boost).
@@ -220,3 +229,93 @@ alongside it, so those are confidence boosts.
 **epic_generic** -- A fallback for games launched via the EGS launcher that
 leave an `EpicGamesLauncher.lnk` shortcut in the game directory. Less specific
 than epic_emu but catches titles that don't bundle EOSSDK directly.
+
+## Modded Crack Pattern
+
+Sometimes a base crack type ships with an additional mod loader (MelonLoader,
+BepInEx, UnityModManager, etc.) that requires extra Wine prefix setup --
+typically a .NET runtime via winetricks. The base crack profile works for the
+unmodded game, but the modded variant needs more.
+
+The pattern is: **layer a more specific signature on top of the base, with a
+dedicated crack type that maps to a dedicated profile.**
+
+### How it works
+
+The scanner picks the *highest-scoring* signature per candidate. If both the
+base and the modded signature match, the modded one wins as long as it scores
+higher. That's the lever we use.
+
+Take OnlineFix + MelonLoader as the worked example:
+
+| Signature | Required files | Typical score |
+|-----------|----------------|---------------|
+| `onlinefix` (base) | `OnlineFix.ini` | ~60 |
+| `onlinefix_melonloader` (modded) | `OnlineFix.ini`, `MelonLoader/` | ~125 |
+
+When a game ships both, the modded signature scores ~2x the base because it
+has two required files (60 points from required) plus more optional/boost
+matches that only modded games have (`Mods/`, `UserLibs/`,
+`MelonLoader/net6/`). When a plain OnlineFix game scans, only the base
+matches because `MelonLoader/` is missing, so the modded signature scores 0.
+
+### When to use this pattern
+
+- A base crack type already has a working profile.
+- A subset of games using that crack ship an additional component (mod
+  loader, runtime, framework) that needs setup the base profile can't
+  provide.
+- The additional component leaves a recognizable filesystem footprint -- a
+  directory, a marker file, a DLL name.
+
+If the modded variant just needs a tweak that the base profile could handle
+unconditionally, don't fork. Just add it to the base. The modded pattern is
+for cases where the extra setup would *hurt* unmodded games (e.g. installing
+.NET 6 unnecessarily, taking 10 minutes, when 95% of games don't need it).
+
+### How to write a modded signature
+
+1. **Add a new variant to `CrackType`** in
+   `crates/fenrir-core/src/library/game.rs`. Don't reuse the base variant --
+   the whole point is to map to a different profile.
+
+2. **Write the signature** in the same TOML file as the base. Include the
+   base's required files plus the modded marker(s):
+
+   ```toml
+   [base_modded_variant]
+   name = "Base + Modded"
+   store = "Steam"
+   crack_type = "BaseModdedVariant"
+   auto_add_threshold = 30
+   required_files = ["base_marker.ini", "ModLoader/"]
+   optional_files = ["base_optional.dll", "Mods/", "Plugins/"]
+   confidence_boost = ["ModLoader/runtime/", "config.json"]
+   cleanup_files = ["base_marker.url", "_Redist/", "setup.exe"]
+   ```
+
+3. **Verify the scoring**. Run `fenrir --verbose scan` against a directory
+   containing both a base-only and a modded version of the same game. The
+   modded version should classify as the modded variant; the unmodded one
+   should classify as the base.
+
+4. **Write a dedicated profile** in `data/profiles/` that includes whatever
+   extra setup the modded variant needs. For the `[winetricks]` section
+   specifically, see the
+   [Profiles Guide](profiles-guide.md#winetricks).
+
+5. **Wire the crack type to the profile** in
+   `crates/fenrir-cli/src/commands/configure.rs` via
+   `crack_type_to_profile_name()`.
+
+### Caveats
+
+- **Both signatures must be present in the same file.** They're not
+  hierarchical -- the scanner doesn't know the modded variant is "a
+  subclass" of the base. It just compares scores. As long as the modded
+  variant scores higher when both match, you're fine.
+- **Don't make the modded variant's required files too narrow.** If the
+  modder ships variants of the mod loader (e.g. MelonLoader 0.5 vs 0.6 in
+  different directories), match the *common* path.
+- **Cleanup files should be the same** as the base unless the modded variant
+  ships extra installer junk that's different.

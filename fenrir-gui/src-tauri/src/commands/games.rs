@@ -112,6 +112,34 @@ pub async fn confirm_game(state: State<'_, AppState>, query: String) -> Result<G
     Ok(game.clone())
 }
 
+/// Read the log file for a game produced by `monitor_process` during launches.
+/// Returns Err with a user-readable message when no log exists yet (game never
+/// launched, or log dir not writable). Bytes are read as UTF-8 with lossy
+/// fallback to keep the GUI rendering even if a crash dumped binary data.
+#[tauri::command]
+pub async fn read_game_log(state: State<'_, AppState>, id: String) -> Result<String, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+
+    let log_path = {
+        let config = state.config.lock().map_err(|e| e.to_string())?;
+        let log_dir = config
+            .general
+            .library_db
+            .parent()
+            .map(|p| p.join("logs"))
+            .unwrap_or_else(|| PathBuf::from("./logs"));
+        log_dir.join(format!("{uuid}.log"))
+    };
+
+    if !log_path.exists() {
+        return Err("no log yet for this game — launch it once to generate output".to_string());
+    }
+
+    let bytes = std::fs::read(&log_path)
+        .map_err(|e| format!("failed to read log {}: {e}", log_path.display()))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 #[tauri::command]
 pub async fn delete_game(state: State<'_, AppState>, id: String) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;

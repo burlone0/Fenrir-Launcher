@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Game, Runtime, GitHubRelease } from "./types";
+import type { Game, Runtime, GitHubRelease, FenrirConfig } from "./types";
 
 // --- Games ---
 export const listGames = () => invoke<Game[]>("list_games");
@@ -18,6 +18,14 @@ export const deleteGame = (id: string) => invoke<void>("delete_game", { id });
 // Sprint 5: will return void and emit scan:progress/scan:done events
 export const scanDirectory = (path?: string) =>
   invoke<unknown>("scan_directory", { path: path ?? null });
+
+// --- Config ---
+export const getConfig = () => invoke<FenrirConfig>("get_config");
+export const setConfig = (key: string, value: string) =>
+  invoke<void>("set_config", { key, value });
+
+// --- Logs ---
+export const readGameLog = (id: string) => invoke<string>("read_game_log", { id });
 
 // --- Runtimes ---
 export const listRuntimes = () => invoke<Runtime[]>("list_runtimes");

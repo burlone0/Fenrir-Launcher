@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type { Game } from "../lib/types";
 import StatusBadge from "./StatusBadge";
 import StoreBadge from "./StoreBadge";
 import ErrorBanner from "./ErrorBanner";
 import ConfirmDialog from "./ConfirmDialog";
+import LogViewer from "./LogViewer";
 
 function formatPlayTime(secs: number) {
   if (secs === 0) return "Never played";
@@ -49,6 +51,7 @@ export default function GameDetail({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [configStep, setConfigStep] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
 
   const canConfigure = game.status === "Detected";
   const canLaunch = game.status === "Configured" || game.status === "Ready";
@@ -136,6 +139,30 @@ export default function GameDetail({
           <Field label="Prefix" value={game.prefix_path} mono />
           <Field label="Runtime" value={game.runtime_id ?? ""} mono />
           <Field label="Added" value={game.added_at.slice(0, 10)} />
+        </div>
+
+        {/* Log section */}
+        <div className="px-5 pb-3 border-b border-zinc-800">
+          <button
+            onClick={() => setLogOpen((v) => !v)}
+            className="text-zinc-400 hover:text-white text-xs w-full text-left py-1 transition-colors"
+          >
+            {logOpen ? "▼" : "▶"} Log
+          </button>
+          {logOpen && (
+            <div className="mt-2">
+              <LogViewer
+                gameId={game.id}
+                onOpenFolder={async () => {
+                  try {
+                    await openPath(game.prefix_path);
+                  } catch {
+                    // opener unavailable — no-op
+                  }
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Error states */}

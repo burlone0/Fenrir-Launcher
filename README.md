@@ -60,6 +60,17 @@ fenrir launch "Elden Ring"
 - Wine or Proton (at least one installed)
 - A GPU with Vulkan support (for DXVK -- most GPUs from 2015 onward qualify)
 
+**Optional:**
+
+- **winetricks** -- needed only for games whose profile requires runtime
+  libraries (.NET, VC++ redistributables, Microsoft fonts). Modded OnlineFix
+  releases that ship MelonLoader for multiplayer (e.g. Megabonk +
+  BonkWithFriends) fall into this category. If winetricks is missing, Fenrir
+  warns during `configure` instead of failing -- install it and re-run.
+  Most distros ship it as `winetricks` in their package manager. See
+  [MelonLoader Games](docs/user/troubleshooting/melonloader-games.md) for
+  the worked case.
+
 ## Recommendations
 
 **Runtime:** [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom)

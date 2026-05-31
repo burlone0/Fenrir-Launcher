@@ -8,6 +8,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
+## [0.5.0] - 2026-05-31
+
+Sprint 7 post-MVP — UX essentials and first-run polish landed in a single
+wave: Settings, per-game logs, theme, onboarding, and cover art.
+
+### Added
+
+- **Settings screen** — editable Defaults section (runtime dropdown,
+  DXVK/VKD3D/esync/fsync toggles) with dirty tracking and Save/Discard
+  flow. Read-only Scan/Privacy/Paths sections for transparency.
+- **Per-game log viewer** — collapsible section inside `GameDetail` reads
+  `<library_db.parent()>/logs/<uuid>.log` via the new `read_game_log`
+  Tauri command, auto-scrolls, and exposes "Open prefix folder" via the
+  opener plugin. Empty state when the game has not been launched yet.
+- **Theme system** — `dark` (default) / `light` / `system` states stored
+  in `uiStore`, persisted in `localStorage`, applied to `<html>.dark`
+  with a `MediaQueryList` listener so `system` reacts to OS changes.
+  Sun/Moon/Monitor cycle toggle in the sidebar. Tailwind switched to
+  `darkMode: 'class'`.
+- **Onboarding wizard** — 4-step first-run overlay (Welcome → Runtime →
+  Scan → Done) triggered when the library and runtime list are both
+  empty. Skippable from any step; persisted via `localStorage` so it
+  never reappears once dismissed.
+- **Cover art (placeholder)** — `coverFor(title)` derives a deterministic
+  palette colour + initials from a hash of the title; `GameCard` now
+  uses a Lutris-style portrait layout with the colored cover header and
+  a dark overlay for legibility.
+- **Backend support for the above** — new `read_game_log(id)` Tauri
+  command added in `commands::games`, registered in `lib.rs`. Frontend
+  `FenrirConfig` and `OnlineFixMelonLoader` types mirrored in
+  `src/lib/types.ts`.
+- **lucide-react icon set** — added as a frontend dependency for icons in
+  Settings, sidebar theme toggle, and onboarding steps.
+
 ## [0.4.0] - 2026-05-20
 
 Concurrent-launch hardening, kill-game support end-to-end, winetricks
