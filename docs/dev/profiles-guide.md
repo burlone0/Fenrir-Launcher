@@ -325,6 +325,34 @@ For GOG games and rips. GOG ships DRM-free so there's no Steam API to deal with
 transparently by Wine's translation layer. Everything else (DXVK, esync/fsync)
 is the same as any other profile.
 
+### dodi
+
+For DODI repacks. After installation the game directory is a standard Steam
+crack, so the profile mirrors steam_generic exactly: `steam_api=n` and
+`steam_api64=n`, DXVK on, esync/fsync on. DODI-specific files (`_Redist/`,
+`DODI Repacks/`) are not present at runtime so they don't affect Wine setup.
+
+### fitgirl
+
+For FitGirl repacks. Same situation as DODI -- post-install the game is a
+standard Steam crack. The FitGirl-specific marker file (`fitgirl-repacks.site`)
+and setup executables are installer artifacts, not runtime artifacts. Profile
+is steam_generic-equivalent.
+
+### scene
+
+For Scene releases (CODEX, PLAZA, EMPRESS, generic `.nfo` releases). Scene
+cracks ship a patched `steam_api.dll`, so `steam_api=n` and `steam_api64=n`
+are both set. No store is assigned since scene releases aren't tied to a
+storefront.
+
+### gog
+
+For GOG games and rips. GOG ships DRM-free so there's no Steam API to deal with
+-- `dll_overrides` is empty. Galaxy DRM (`GalaxyClient.dll`) is handled
+transparently by Wine's translation layer. Everything else (DXVK, esync/fsync)
+is the same as any other profile.
+
 ## User Overrides
 
 Players can override profile settings per game through the `user_overrides`
