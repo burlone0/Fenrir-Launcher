@@ -202,6 +202,15 @@ to try:
 
 ---
 
+## Game-specific guides
+
+Some games have known quirks that need a dedicated walkthrough:
+
+- **[MelonLoader Games](troubleshooting/melonloader-games.md)** -- OnlineFix
+  games that ship a separate mod loader for multiplayer (Megabonk +
+  BonkWithFriends and similar). Needs winetricks and the .NET 6 Desktop
+  Runtime in the Wine prefix.
+
 ## Still stuck?
 
 Run the operation with `--verbose` and open a GitHub issue with the output.

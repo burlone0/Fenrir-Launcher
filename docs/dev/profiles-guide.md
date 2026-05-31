@@ -37,7 +37,15 @@ dxvk = true
 vkd3d = false
 esync = true
 fsync = true
+
+[winetricks]
+components = ["dotnetdesktop6"]
+optional = ["corefonts"]
 ```
+
+`[winetricks]` is optional. If your profile doesn't need any winetricks
+components, leave the section out entirely (or write `[winetricks]` with
+nothing under it).
 
 ### Sections
 
@@ -86,6 +94,38 @@ always a win on Linux -- better performance, fewer rendering glitches.
 (widely supported), fsync uses futex (needs kernel >= 5.16 or so, but faster).
 You can enable both -- Wine picks the best available.
 
+#### [winetricks]
+
+Some games need runtime libraries that aren't part of a base Wine prefix --
+.NET runtimes, Visual C++ redistributables, Microsoft fonts, and so on.
+Listing them here makes Fenrir install them with `winetricks -q <name>` during
+`configure`, between prefix creation and DLL override application.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `components` | list of strings | Mandatory. If any fail to install, the game is marked `Broken`. |
+| `optional` | list of strings | Best-effort. If install fails (no network, package outdated, etc.) configure continues with a warning. |
+
+Component names are passed verbatim to `winetricks -q <name>`. Run
+`winetricks list-all` for valid identifiers -- common ones include
+`dotnetdesktop6`, `dotnet48`, `vcrun2019`, `vcrun2022`, `corefonts`,
+`d3dcompiler_47`.
+
+Winetricks must be installed on the user's system. If it isn't, Fenrir emits a
+non-fatal warning during configure rather than crashing -- the user can
+install winetricks and re-run configure without losing state. See the
+[Megabonk example](#onlinefix_melonloader) below for a worked case.
+
+Notes:
+
+- Component installs are **idempotent**. Subsequent configures detect installed
+  components and skip them.
+- First-time installs of large components (`dotnetdesktop6`, `vcrun2022`) can
+  take 5-10 minutes. The GUI emits `configure:step` progress events during
+  install so the user knows something is happening.
+- Don't list components for things Wine already handles. DXVK and VKD3D are
+  enabled via `[features]`, not winetricks.
+
 ## Profile-to-Game Matching
 
 Fenrir maps crack types to profile names with a simple lookup:
@@ -93,6 +133,7 @@ Fenrir maps crack types to profile names with a simple lookup:
 | CrackType | Profile name |
 |-----------|-------------|
 | `OnlineFix` | `onlinefix` |
+| `OnlineFixMelonLoader` | `onlinefix_melonloader` |
 | `DODI` | `dodi` |
 | `FitGirl` | `fitgirl` |
 | `Scene` | `scene` |
@@ -191,9 +232,70 @@ For OnlineFix cracks that enable LAN/online multiplayer via Steam emulation.
 - `dll_overrides`: adds `steamclient=n`, `steamclient64=n` on top of the
   standard Steam API overrides. OnlineFix ships custom steamclient DLLs for
   its multiplayer emulation.
+- `version=n,b`: modern OnlineFix loader hook -- the DLL-hijacking entry
+  point that reads `dlllist.txt` and pulls in `OnlineFix64.dll` +
+  `SteamOverlay64.dll`. Without this, Wine uses its builtin `version.dll`
+  and the multiplayer patch never loads.
+- `winmm=n,b`: legacy OnlineFix loader hook for older crack vintages.
+  Both kept to cover both eras.
 - `OPENSSL_ia32cap`: disables an AVX CPU instruction that causes crashes in
-  some OnlineFix configurations
-- Everything else: same as steam_generic
+  some OnlineFix configurations.
+- Everything else: same as steam_generic.
+
+### onlinefix_melonloader
+
+For OnlineFix games that ship MelonLoader and a mod providing the actual
+multiplayer functionality. The trigger case is **Megabonk + BonkWithFriends**,
+but the same pattern applies to any OnlineFix game where the multiplayer
+features live in a MelonLoader mod instead of base OnlineFix.
+
+What's different from plain `onlinefix`:
+
+- Same DLL override set (both crack vintages covered).
+- Adds `[winetricks]` with `dotnetdesktop6` as a mandatory component.
+  MelonLoader 0.6+ needs the .NET 6 Desktop Runtime to bootstrap
+  `MelonLoader.NativeHost.dll`. Without it, mods silently fail to load and
+  the game runs as if no mods existed -- overlay and Spacewar AppId still
+  work via base OnlineFix `steam_api64`, but invites/lobbies/rich-presence
+  via the modded multiplayer are dead.
+- `corefonts` in `optional` -- improves the legibility of the MelonLoader
+  console window on Wine setups without bundled MS fonts.
+
+Full profile (`data/profiles/onlinefix_melonloader.toml`):
+
+```toml
+[profile]
+name = "onlinefix_melonloader"
+description = "OnlineFix with MelonLoader mod-based multiplayer (.NET 6 required)"
+
+[wine]
+windows_version = "win10"
+dll_overrides = [
+    "steam_api=n,b", "steam_api64=n,b",
+    "steamclient=n,b", "steamclient64=n,b",
+    "OnlineFix64=n,b", "SteamOverlay64=n,b",
+    "version=n,b", "winmm=n,b",
+    "winhttp=n,b", "dnet=n",
+]
+
+[env]
+OPENSSL_ia32cap = "~0x20000000"
+
+[features]
+dxvk = true
+vkd3d = false
+esync = true
+fsync = true
+
+[winetricks]
+components = ["dotnetdesktop6"]
+optional = ["corefonts"]
+```
+
+This profile is selected when the scanner detects both `OnlineFix.ini` and a
+`MelonLoader/` directory in the game root -- see the
+[Signatures Guide](signatures-guide.md#modded-crack-pattern) for how the
+"modded crack" detection layer works.
 
 ### dodi
 
