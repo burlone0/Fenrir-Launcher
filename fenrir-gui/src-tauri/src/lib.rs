@@ -59,6 +59,7 @@ pub fn run() {
             commands::games::launch_game,
             commands::games::kill_game,
             commands::games::is_running,
+            commands::games::read_game_log,
             commands::scan::scan_directory,
             commands::runtime::list_runtimes,
             commands::runtime::available_runtimes,
