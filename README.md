@@ -6,28 +6,50 @@ slow launchers.
 
 [![CI](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/burlone0/Fenrir-Launcher/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-![Version: 0.2.0](https://img.shields.io/badge/version-0.2.0-green.svg)
+![Version: 0.5.0](https://img.shields.io/badge/version-0.5.0-green.svg)
 
 ## What It Does
+
+**Core launcher:**
 
 - **Scans your game folders** and automatically identifies games using
   signature-based pattern matching -- it knows what a Steam crack looks like,
   what an OnlineFix release looks like, what a FitGirl repack looks like
-- **Detects GOG and Epic games** -- in addition to Steam cracks, repacks, and
-  scene releases
+- **Detects games from multiple stores** -- Steam cracks, repacks, scene
+  releases, GOG, and Epic Games Store, all in one library
 - **Creates isolated Wine prefixes** for each game -- no contamination, no
   shared state, no mysterious breakage
 - **Auto-tunes Wine settings** based on the detected game type -- DLL overrides,
   DXVK, esync/fsync, environment variables, all handled
+- **Installs winetricks components** automatically when a profile requires them
+  (e.g. .NET 6 for MelonLoader-modded games)
 - **Launches games** with the right runtime and configuration, tracks playtime,
-  logs output
+  logs output, and supports stopping a running game from the UI
 - **Downloads runtimes automatically** -- fetch GE-Proton or Wine-GE directly
   from GitHub, with SHA-512 checksum verification and progress tracking
 - **Stays offline** -- zero network connections by default, no telemetry, no
   phoning home
 - **Runs fast** -- native Rust binary, instant startup, low memory footprint
-- **Downloads runtimes automatically** -- fetch GE-Proton or Wine-GE directly from GitHub, with SHA-512 checksum verification and progress tracking
-- **Detects GOG and Epic games** -- in addition to Steam cracks, repacks, and scene releases
+
+**Desktop GUI** (Tauri v2 + React, since v0.3.0):
+
+- **Library view** -- grid of game cards with cover art, status, store and
+  crack-type badges, filterable and searchable
+- **Settings screen** -- edit every config option in-app, no TOML editing
+- **Per-game log viewer** -- read stdout/stderr from any past launch directly
+  in the UI
+- **First-run onboarding wizard** -- guides new users through scan paths and
+  runtime install
+- **Theme support** -- dark, light, or follow system
+- **Keyboard shortcuts** -- `Ctrl+S` opens scan, `Enter` configures or launches
+  the selected game
+
+## Screenshots
+
+Screenshots of the GUI live in [docs/assets/screenshots/](docs/assets/screenshots/).
+That directory's [README](docs/assets/screenshots/README.md) lists what each
+image should show and where it's referenced -- handy if you want to help
+populate them.
 
 ## Quick Start
 
@@ -36,7 +58,24 @@ slow launchers.
 git clone https://github.com/burlone0/Fenrir-Launcher.git
 cd Fenrir-Launcher
 cargo build --release
+```
 
+### Using the GUI
+
+```bash
+# From the repo root
+cd fenrir-gui
+npm install
+npm run tauri dev          # development mode
+npm run tauri build        # production binary in src-tauri/target/release/
+```
+
+On first launch the onboarding wizard walks you through scan directories,
+runtime installation, and theme. After that, everything is point-and-click.
+
+### Using the CLI
+
+```bash
 # Copy to PATH (optional)
 cp target/release/fenrir-cli ~/.local/bin/fenrir
 
@@ -52,6 +91,9 @@ fenrir configure "Elden Ring"
 # Play
 fenrir launch "Elden Ring"
 ```
+
+The CLI and the GUI share the same database -- changes made through one show
+up in the other immediately.
 
 ## Requirements
 
@@ -117,16 +159,19 @@ Fenrir is under active development. Here's where things stand:
 - **Fase 2 -- Runtime management** -- done. Automatic download of GE-Proton
   and Wine-GE, expanded detection (GOG, Epic, all major crack types), robust
   error handling with hints, structured logging.
-- **Fase 3 -- GUI** -- next. Tauri-based visual launcher with game library,
-  cover art, and configuration UI.
-- **Fase 4 -- Multi-store** -- planned. Import from Lutris/Heroic,
-  metadata fetching, community signatures.
+- **Fase 3 -- GUI** -- done. Tauri-based visual launcher (v0.3.0), concurrent
+  launch protection and kill-game (v0.4.0), Settings + log viewer + theme +
+  onboarding + cover art (v0.5.0).
+- **Fase 4 -- Multi-store + community** -- planned. Native GOG and Epic
+  Galaxy integration beyond filesystem detection, Lutris/Heroic import,
+  metadata fetching, community-contributed signatures.
 
 ## Documentation
 
 **For users:**
 - [Installation](docs/user/installation.md)
-- [Getting Started](docs/user/getting-started.md)
+- [Getting Started](docs/user/getting-started.md) -- CLI walkthrough
+- [GUI Guide](docs/user/gui-guide.md) -- desktop app walkthrough
 - [Commands Reference](docs/user/commands.md)
 - [Configuration](docs/user/configuration.md)
 - [Troubleshooting](docs/user/troubleshooting.md)

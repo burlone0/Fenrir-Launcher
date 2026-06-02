@@ -3,6 +3,11 @@
 This walks you through the whole thing: from a folder of game files to
 actually playing the game. Five minutes, tops.
 
+This page focuses on the **CLI**. If you'd rather click than type, the
+desktop app does the same flow with a graphical interface -- see the
+[GUI Guide](gui-guide.md). The two share a database so you can mix and
+match freely.
+
 ## Before You Start
 
 Make sure you have a runtime installed. Without Wine or Proton, `fenrir configure`
